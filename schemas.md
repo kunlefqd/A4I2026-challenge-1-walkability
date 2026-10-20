@@ -53,3 +53,25 @@
 | `poverty_rate` | `FLOAT64` | `NULLABLE` | Proportion of population below the poverty line (`0.0`–`1.0`) |
 | `no_vehicle_rate` | `FLOAT64` | `NULLABLE` | Proportion of households with no vehicle (`0.0`–`1.0`) |
 | `pop_over_65` | `FLOAT64` | `NULLABLE` | Total population aged 65 and older |
+
+### 4. `tract_heat_risk`
+**Full Table ID:** `qwiklabs-gcp-04-2bc40033bbb7.a4i_climate.tract_heat_risk`  
+**Description:** Census-tract level heat hazard scores normalized using a Hazard Floor (`<= 1.0°F` zeroed out) and Adjusted Min-Max scaling (`[0.0, 1.0]`), joined with ACS vulnerability indicators.
+
+| Column Name | Data Type | Mode | Description |
+| :--- | :--- | :--- | :--- |
+| `geo_id` | `STRING` | `NULLABLE` | 11-character FIPS census tract identifier |
+| `tract_lat` | `FLOAT` | `NULLABLE` | Census tract internal point latitude |
+| `tract_lon` | `FLOAT` | `NULLABLE` | Census tract internal point longitude |
+| `observation_count` | `INTEGER` | `NULLABLE` | Number of street-level heat observations matched to the tract |
+| `tract_avg_temp_f` | `FLOAT` | `NULLABLE` | Mean afternoon temperature (°F) within the tract |
+| `raw_anomaly_f` | `FLOAT` | `NULLABLE` | Raw temperature difference (°F) relative to the city-wide mean |
+| `floored_anomaly_f` | `FLOAT` | `NULLABLE` | Hazard-floored anomaly (`0.0` if `raw_anomaly_f <= 1.0`, else `raw_anomaly_f`) |
+| `max_positive_anomaly_f` | `FLOAT` | `NULLABLE` | Maximum positive `floored_anomaly_f` across all tracts in the city |
+| `normalized_heat_hazard` | `FLOAT` | `NULLABLE` | Adjusted Min-Max heat hazard score (`floored_anomaly_f / max_positive_anomaly_f`) on a `[0.0, 1.0]` scale |
+| `total_pop` | `FLOAT` | `NULLABLE` | Total tract population |
+| `median_age` | `FLOAT` | `NULLABLE` | Median age of tract residents |
+| `median_income` | `FLOAT` | `NULLABLE` | Median household income |
+| `poverty_rate` | `FLOAT` | `NULLABLE` | Proportion of population below the poverty line (`0.0` to `1.0`) |
+| `no_vehicle_rate` | `FLOAT` | `NULLABLE` | Proportion of households with no vehicle available (`0.0` to `1.0`) |
+| `pop_over_65` | `FLOAT` | `NULLABLE` | Total population aged 65 and older |
