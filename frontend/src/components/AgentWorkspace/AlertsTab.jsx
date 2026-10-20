@@ -205,8 +205,22 @@ export default function AlertsTab({
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-slate-400 px-1">
               <span>Automated Title VI Equity Verification Ledger</span>
-              <span className="font-mono text-emerald-400 font-semibold">100% Audited</span>
+              <span className="font-mono text-slate-400">{auditLog.length} {auditLog.length === 1 ? 'entry' : 'entries'}</span>
             </div>
+
+            {filteredAuditLog.length === 0 && (
+              <div className="text-center py-12 space-y-2">
+                <ShieldCheck className="w-10 h-10 text-slate-500 mx-auto opacity-80" />
+                <h4 className="text-sm font-semibold text-slate-200">
+                  {auditLog.length === 0 ? 'No actions recorded yet' : 'No entries match your search'}
+                </h4>
+                {auditLog.length === 0 && (
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Deploying a truck from an alert or a tract adds an entry here.
+                  </p>
+                )}
+              </div>
+            )}
 
             {filteredAuditLog.map((log) => (
               <div

@@ -70,4 +70,8 @@ export const isVulnerableTract = (t) =>
 // Display helpers so missing values read as "n/a" instead of "null%".
 export const fmtPct = (v) => (v == null ? 'n/a' : `${v}%`);
 export const fmtTemp = (v) => (v == null ? 'n/a' : `${v.toFixed(1)}°F`);
-export const fmtOffset = (v) => (v == null ? 'n/a' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}°F`);
+export const fmtOffset = (v) => {
+  if (v == null) return 'n/a';
+  const r = Math.round(v * 10) / 10 || 0; // `|| 0` turns -0 into 0, so -0.02 reads "+0.0°F"
+  return `${r >= 0 ? '+' : ''}${r.toFixed(1)}°F`;
+};

@@ -12,7 +12,6 @@ import { useHeatSummary, useTractData } from './lib/useTractData';
 import { computeLiveMetrics } from './lib/liveMetrics';
 import { fmtOffset, fmtPct, fmtTemp } from './lib/tractAdapter';
 import { buildVulnerabilityAlerts } from './lib/vulnerabilityAlerts';
-import { INITIAL_AUDIT_LOG } from './data/initialAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
 import { CheckCircle2, Bell, Sparkles } from 'lucide-react';
@@ -43,7 +42,8 @@ export default function App() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('chat'); // 'chat' | 'alerts'
   const [chatMessages, setChatMessages] = useState(INITIAL_CHAT_MESSAGES);
   const [alerts, setAlerts] = useState([]);
-  const [auditLog, setAuditLog] = useState(INITIAL_AUDIT_LOG);
+  // Alert history starts empty and fills as alerts are acted on (see handleConfirmDispatch).
+  const [auditLog, setAuditLog] = useState([]);
 
   // Alerts are the most vulnerable live tracts. Seed them once, so dismissed alerts stay dismissed.
   const alertsSeeded = useRef(false);
