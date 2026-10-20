@@ -1,0 +1,29 @@
+{
+  "name": "heat-response-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.4.0",
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/google-maps": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@vis.gl/react-google-maps": "^1.10.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/google.maps": "^3.66.7",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "~5.6",
+    "vite": "^5.4.21"
+  }
+}
