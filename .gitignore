@@ -21,4 +21,9 @@ Thumbs.db
 
 # Local data
 *.parquet
-*.csv.gz
+*.csv.gz 
+
+node_modules/
+dist/
+.env.local
+*.tsbuildinfo
