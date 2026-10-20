@@ -2,6 +2,12 @@
 
 **Agents for Impact 2026**
 
+## Live deployment
+
+- Frontend: https://shade-frontend-965843808689.us-central1.run.app
+- API: https://shade-api-hgwszp7mja-uc.a.run.app
+
+
 ---
 
 ## Why this one matters
