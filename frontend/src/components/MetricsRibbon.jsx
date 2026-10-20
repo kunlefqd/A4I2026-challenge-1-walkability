@@ -15,10 +15,16 @@ export default function MetricsRibbon({
   alertCount, 
   simulatedHeatBoost, 
   setSimulatedHeatBoost,
+  weather,
+  liveRiskRows = [],
   onOpenAlerts
 }) {
-  const effectiveTemp = currentCity.ambientTemp + simulatedHeatBoost;
-  const effectiveIndex = currentCity.heatIndex + simulatedHeatBoost;
+  const currentTemp = weather?.tempF ?? currentCity.ambientTemp;
+  const feelsLike = weather?.feelsLikeF ?? currentCity.heatIndex;
+  const effectiveTemp = currentTemp + simulatedHeatBoost;
+  const effectiveIndex = feelsLike + simulatedHeatBoost;
+  const topRisk = liveRiskRows[0];
+  const liveRiskLabel = topRisk ? `Priority ${Number(topRisk.combined_priority_score).toFixed(2)} / hazard ${Number(topRisk.normalized_heat_hazard).toFixed(2)}` : 'Local fallback';
 
   return (
     <div className="bg-slate-900/70 border-b border-slate-800/80 px-4 lg:px-6 py-2">
@@ -36,12 +42,17 @@ export default function MetricsRibbon({
               <div className="flex items-center gap-1.5 font-semibold text-slate-100">
                 <span className="text-sm font-mono text-orange-400">{effectiveTemp}°F</span>
                 <span className="text-slate-500">|</span>
-                <span className="text-slate-300">Heat Index:</span>
+                <span className="text-slate-300">Feels Like:</span>
                 <span className="font-mono text-rose-400 font-bold">{effectiveIndex}°F</span>
               </div>
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                {currentCity.heatAdvisoryLevel}
+                {weather?.summary || currentCity.heatAdvisoryLevel} · {weather?.provider || 'weather fallback'}
               </p>
+              {topRisk && (
+                <p className="text-[10px] text-amber-300 font-mono mt-0.5">
+                  Live risk: {liveRiskLabel}
+                </p>
+              )}
             </div>
           </div>
 

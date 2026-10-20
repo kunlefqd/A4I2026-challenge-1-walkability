@@ -41,10 +41,10 @@ export default function Navbar({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-white tracking-tight leading-none">
-                  Urban Heat Resilience Planner
+                  SHADE
                 </h1>
                 <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 hidden sm:inline-block">
-                  AI Copilot
+                  Smart Heat Alert &amp; Dispatch Engine
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1">

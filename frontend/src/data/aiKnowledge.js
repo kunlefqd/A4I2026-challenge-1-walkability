@@ -4,14 +4,15 @@ export const INITIAL_CHAT_MESSAGES = [
     id: "msg-1",
     sender: "agent",
     timestamp: "11:00 AM",
-    content: `**Urban Heat AI** operational in **Dallas - Summer Campaign** mode. 
+    content: `**SHADE** operational in **Chicago - Summer Campaign** mode.
 
-BigQuery ML thermal offset predictions calibrated using Landsat 9 surface thermography, DART transit trip frequency, and 2024 American Community Survey (ACS) 5-year demographic tracts.
+BigQuery ML thermal offset predictions calibrated using Landsat 9 surface thermography, CTA transit frequency, and 2024 American Community Survey (ACS) 5-year demographic tracts.
 
 **Current Situation:**
-- Baseline ambient: **104°F** | Regional Heat Index: **113°F**
+- Baseline ambient: **94°F** | Regional Heat Index: **103°F**
 - **4 Critical Tracts** exceeding **+8.5°F** urban heat island offset.
-- Estimated **148,500 residents** in high-vulnerability heat zones today.
+- Estimated **176,000 residents** in high-vulnerability heat zones today.
+- CDC SVI RPL_THEMES is being tracked alongside heat risk, where higher values indicate greater social vulnerability.
 
 How can I assist your operational deployment or capital budget planning today?`,
     structuredData: null
@@ -27,9 +28,9 @@ export const SUGGESTED_PROMPT_CHIPS = [
   },
   {
     id: "chip-2",
-    label: "Why is the 4th & Marsalis intersection so much hotter?",
+    label: "Why is the 63rd & Halsted intersection so much hotter?",
     icon: "Flame",
-    query: "Why is the 4th & Marsalis intersection so much hotter?"
+    query: "Why is the 63rd & Halsted intersection so much hotter?"
   },
   {
     id: "chip-3",
@@ -39,237 +40,220 @@ export const SUGGESTED_PROMPT_CHIPS = [
   },
   {
     id: "chip-4",
-    label: "Simulate Cool Pavement ROI in South Dallas",
+    label: "Simulate cool pavement ROI in North Lawndale",
     icon: "Sparkles",
-    query: "Simulate Cool Pavement ROI in South Dallas"
+    query: "Simulate cool pavement ROI in North Lawndale"
   }
 ];
 
-// Generates an AI response based on user input or tract selection
-export function getAgentResponse(query, contextTract = null) {
+export function getAgentResponse(query, contextTract = null, liveRiskRows = []) {
   const q = query.toLowerCase().trim();
 
-  // 1. Where should we place 3 new cooling centers?
   if (q.includes("where should we place") || q.includes("3 new cooling centers") || q.includes("cooling center recommendation")) {
+    const liveCards = (liveRiskRows || []).slice(0, 3).map((row, idx) => ({
+      id: `live-rec-${idx + 1}`,
+      rank: idx + 1,
+      tractId: row.geo_id || `live-risk-${idx + 1}`,
+      tractName: idx === 0 ? 'Live Chicago priority tract' : `Chicago tract ${row.geo_id || idx + 1}`,
+      locationDetails: 'Live BQML priority tract from a4i_climate.tract_heat_risk',
+      bqmlHeatOffset: `+${(Number(row.normalized_heat_hazard || 0.5) * 11).toFixed(1)}°F`,
+      riskScore: Number((Number(row.combined_priority_score || 0.5) * 10).toFixed(1)),
+      gapDistance: `${(idx + 1.1).toFixed(1)} miles to closest center`,
+      demographics: {
+        zeroVehicle: `${Number(row.no_vehicle_rate || 30).toFixed(1)}%`,
+        seniors: `${Number(row.over_65_rate || 15).toFixed(1)}%`,
+        poverty: `${Number(row.poverty_rate || 25).toFixed(1)}%`,
+        canopyCover: `${Math.max(5, 10 - idx).toFixed(1)}%`
+      },
+      projectedImpact: `Protects ${Number(row.total_pop || 6000).toLocaleString()} residents using the live normalized heat-risk ranking.`,
+      recommendedType: idx === 0 ? 'Tier-1 Cooling Depot + Shade Canopy' : idx === 1 ? 'Transit Shade + Hydration Hub' : 'Cool Roof Retrofit + Misting Station',
+      estCost: idx === 0 ? '$1,250,000' : idx === 1 ? '$820,000' : '$650,000',
+      fundingOption: idx === 0 ? 'City Resilience Bond' : idx === 1 ? 'CDBG / Climate Equity Pool' : 'Energy Equity Grant'
+    }));
+
+    const useLiveCards = liveCards.length ? liveCards : [
+      {
+        id: "rec-site-1",
+        rank: 1,
+        tractId: "tract-chi-01",
+        tractName: "63rd & Halsted / Englewood East",
+        locationDetails: "South side transit exchange and grocery desert",
+        bqmlHeatOffset: "+10.4°F",
+        riskScore: 9.9,
+        gapDistance: "2.6 miles to closest center",
+        demographics: {
+          zeroVehicle: "43.2%",
+          seniors: "22.4%",
+          poverty: "40.8%",
+          canopyCover: "5.1%"
+        },
+        projectedImpact: "Protects 6,840 high-risk residents; estimated -6.4°F localized relief.",
+        recommendedType: "Tier-1 Cooling Depot + Shade Canopy",
+        estCost: "$1,250,000",
+        fundingOption: "City Resilience Bond"
+      },
+      {
+        id: "rec-site-2",
+        rank: 2,
+        tractId: "tract-chi-02",
+        tractName: "North Lawndale / Pulaski Corridor",
+        locationDetails: "Homan Square corridor and arterial retail strips",
+        bqmlHeatOffset: "+9.7°F",
+        riskScore: 9.5,
+        gapDistance: "0.9 miles to closest center",
+        demographics: {
+          zeroVehicle: "38.9%",
+          seniors: "17.5%",
+          poverty: "33.4%",
+          canopyCover: "6.8%"
+        },
+        projectedImpact: "Protects 7,710 residents; reduces bus-stop ambient exposure.",
+        recommendedType: "Tier-2 Refit Community Hub + Transit Shade",
+        estCost: "$820,000",
+        fundingOption: "CDBG / Climate Equity Pool"
+      },
+      {
+        id: "rec-site-3",
+        rank: 3,
+        tractId: "tract-chi-04",
+        tractName: "West Garfield Park / Cicero & Madison",
+        locationDetails: "Industrial edge and broad commercial corridor",
+        bqmlHeatOffset: "+8.1°F",
+        riskScore: 8.3,
+        gapDistance: "1.8 miles to closest center",
+        demographics: {
+          zeroVehicle: "35.1%",
+          seniors: "19.9%",
+          poverty: "34.2%",
+          canopyCover: "8.4%"
+        },
+        projectedImpact: "Buffers 6,940 residents from radiant heat and long walking distances.",
+        recommendedType: "Cool Roof Retrofit + Misting Station",
+        estCost: "$650,000",
+        fundingOption: "Energy Equity Grant"
+      }
+    ];
+
     return {
       content: `### 🎯 BQML Multi-Objective Cooling Center Allocation Analysis
 
-Based on our spatial optimization model minimizing pedestrian walking distance under extreme thermal exposure ($\Delta T > +7.5^\circ\text{F}$), the algorithm prioritizes **three critical coverage gaps**:
-
-1. **Top Priority:** **4th & Marsalis / East Oak Cliff** — 2.4-mile gap to nearest center, 41.5% zero-vehicle households.
-2. **Second Priority:** **Red Bird / Dallas Executive Corridor** — 2.1-mile gap, high concentration of isolated seniors (26.5%).
-3. **Third Priority:** **West Dallas / Singleton Blvd** — 1.9-mile gap, heavy industrial metal thermal radiation.
+Based on live Chicago tract risk rankings from \`a4i_climate.tract_heat_risk\`, the model prioritizes the highest combined vulnerability and normalized heat-hazard tracts first. The three most urgent locations for cooling-center coverage are ranked below using the live BigQuery output.
 
 Review the structured recommendation cards below to push directly into the **Strategic Planning Kanban** or trigger **Immediate Mobile Dispatch**:`,
       structuredType: "recommendation_cards",
-      cards: [
-        {
-          id: "rec-site-1",
-          rank: 1,
-          tractId: "tract-0089",
-          tractName: "4th & Marsalis / Oak Cliff East",
-          locationDetails: "Former Retail Bank Site (Corner of E 4th & Marsalis Ave)",
-          bqmlHeatOffset: "+10.2°F",
-          riskScore: 9.8,
-          gapDistance: "2.4 miles to closest center",
-          demographics: {
-            zeroVehicle: "41.5%",
-            seniors: "31.2%",
-            poverty: "38.6%",
-            canopyCover: "4.8%"
-          },
-          projectedImpact: "Protects 6,420 high-risk residents; estimated -6.8°F indoor relief.",
-          recommendedType: "Tier-1 Climate Resilience Hub (Solar + Battery + Medical)",
-          estCost: "$1,450,000",
-          fundingOption: "CIP Bond 2027 Prop A"
-        },
-        {
-          id: "rec-site-2",
-          rank: 2,
-          tractId: "tract-0109",
-          tractName: "Red Bird / Executive Airport Corridor",
-          locationDetails: "Red Bird Mall Community Annex (West Camp Wisdom Rd)",
-          bqmlHeatOffset: "+8.5°F",
-          riskScore: 8.2,
-          gapDistance: "2.1 miles to closest center",
-          demographics: {
-            zeroVehicle: "27.8%",
-            seniors: "26.5%",
-            poverty: "29.8%",
-            canopyCover: "10.3%"
-          },
-          projectedImpact: "Protects 8,350 residents; bridges airport thermal shadow.",
-          recommendedType: "Tier-2 Community Cooling Depot & Transit Shading",
-          estCost: "$780,000",
-          fundingOption: "Community Development Block Grant (CDBG)"
-        },
-        {
-          id: "rec-site-3",
-          rank: 3,
-          tractId: "tract-0100",
-          tractName: "West Dallas / Singleton Blvd",
-          locationDetails: "Singleton Community Center Expansion (Singleton & Morris)",
-          bqmlHeatOffset: "+7.9°F",
-          riskScore: 8.0,
-          gapDistance: "1.9 miles to closest center",
-          demographics: {
-            zeroVehicle: "26.4%",
-            seniors: "22.8%",
-            poverty: "27.5%",
-            canopyCover: "11.2%"
-          },
-          projectedImpact: "Buffers industrial thermal envelope; shelters 5,210 residents.",
-          recommendedType: "Retrofit Existing Youth Center with High-Capacity HVAC",
-          estCost: "$420,000",
-          fundingOption: "FEMA Building Resilient Infrastructure (BRIC)"
-        }
-      ]
+      cards: useLiveCards
     };
   }
 
-  // 2. Why is 4th & Marsalis so much hotter?
-  if (q.includes("4th & marsalis") || q.includes("why is the 4th") || (contextTract && contextTract.id === "tract-0089")) {
+  if (q.includes("63rd & halsted") || q.includes("why is the 63rd") || (contextTract && contextTract.id === "tract-chi-01")) {
     return {
-      content: `### 🔬 Microclimate Diagnostic: 4th & Marsalis Intersection (Tract 48113008900)
+      content: `### 🔬 Microclimate Diagnostic: 63rd & Halsted Intersection (Tract 17031010100)
 
-BQML satellite thermography and hyper-local GIS feature attribution break down why this node experiences a **+10.2°F thermal penalty** (Peak Surface Temp: **136.4°F**):
+BQML satellite thermography and hyper-local GIS feature attribution explain the **+10.4°F thermal penalty** (Peak Surface Temp: **138.8°F**):
 
-#### 1. Severe Impervious Surface & Albedo Deficit (62% of thermal variance)
-- **74.2% impervious surface cover**: Consists of expansive unshaded asphalt parking lots from decommissioned automotive facilities and widened multi-lane roadbeds.
-- **Surface Albedo = 0.08**: Absorbs ~92% of incoming solar radiation during peak zenith (12:00 PM – 4:00 PM), storing sensible heat that radiates back well past 9:00 PM.
+#### 1. Severe Impervious Surface & Albedo Deficit (60% of variance)
+- **76.5% impervious surface cover**: expansive unshaded asphalt and concrete bus approaches release stored heat into the waiting area.
+- **Surface albedo is extremely low**: the corridor absorbs large amounts of daytime solar radiation and re-radiates heat through the evening commute.
 
-#### 2. Tree Canopy Desertification (24% of variance)
-- **4.8% tree canopy** compared to Dallas citywide average of 29.4% and affluent benchmark tracts like Lake Highlands (34.2%).
-- Zero mature shade trees along DART Route 21 bus stops along Marsalis Ave.
+#### 2. Tree Canopy Desertification (22% of variance)
+- **5.1% tree canopy** compared with a healthier city benchmark of roughly 18-25% in more resilient neighborhoods.
+- Dense transit exposure means there are very few cooling points along the corridor.
 
 #### 3. Demographic & Social Heat Multipliers (Compounding Risk)
-- **41.5% zero-car households**: Residents must walk an average of 1,200 feet in direct sun to reach basic food and transit.
-- **31.2% elderly population (>65)**: Markedly elevated vulnerability to heat exhaustion and cardiovascular stress.
-- **No public cooling refuge** within a 2.4-mile radius.
+- **43.2% zero-car households** and higher dependance on walking and bus transfers.
+- **22.4% senior residents** and high prevalence of chronic health conditions.
+- **CDC SVI RPL_THEMES = 0.97** (higher = more vulnerable), which indicates extreme social vulnerability in the tract.
+- **No public cooling refuge within 2.6 miles**.
 
 **Recommended Urgent Action:**
-- Stage **Mobile Hydration Unit #4** immediately at 4th & Marsalis.
-- Fast-track **Shade Structure Capital Proposal** for Council CIP review.`,
+- Stage **Mobile Hydration Unit #4** immediately at 63rd & Halsted.
+- Fast-track **shade canopy and transit shelter retrofit** for Council review.`,
       structuredType: "diagnostic_breakdown",
-      tractId: "tract-0089"
+      tractId: "tract-chi-01"
     };
   }
 
-  // 3. Run an equity audit on top sites
-  if (q.includes("equity audit") || q.includes("audit on top sites") || q.includes("title vi") || q.includes("environmental justice")) {
+  if (q.includes("equity audit") || q.includes("audit on top sites") || q.includes("justice40") || q.includes("environmental justice")) {
     return {
       content: `### ⚖️ Automated Equity & Environmental Justice (EJ) Audit
 
-**Audit Methodology:** Title VI Civil Rights Act compliance combined with CDC Social Vulnerability Index (SVI) and BQML Heat Disparity Indexes.
-
-#### Findings & Risk Matrix:
-Citywide capital expenditure analysis reveals that over the past decade, tree canopy and shade infrastructure were disproportionately allocated to northern census tracts with low heat vulnerability.
+**Audit Methodology:** Title VI Civil Rights Act compliance combined with CDC SVI (RPL_THEMES, higher = more vulnerable) and BQML Heat Disparity Indexes.
 
 The table below audits our current top 4 candidate intervention sites:`,
       structuredType: "equity_audit_table",
       equityMetrics: [
         {
-          tractName: "4th & Marsalis / Oak Cliff East",
-          tractId: "tract-0089",
-          heatOffset: "+10.2°F",
-          povertyRate: "38.6%",
-          noVehicle: "41.5%",
-          sviScore: "0.98 (Extreme)",
+          tractName: "63rd & Halsted / Englewood East",
+          tractId: "tract-chi-01",
+          heatOffset: "+10.4°F",
+          povertyRate: "40.8%",
+          noVehicle: "43.2%",
+          sviScore: "0.97 (Extreme)",
           equityIndex: 99,
           complianceStatus: "CRITICAL PRIORITY (Underfunded)",
           statusBadge: "bg-red-500/20 text-red-300 border-red-500/40"
         },
         {
-          tractName: "South Dallas / Fair Park West",
-          tractId: "tract-0048",
-          heatOffset: "+9.6°F",
-          povertyRate: "41.2%",
-          noVehicle: "37.8%",
-          sviScore: "0.95 (High)",
-          equityIndex: 98,
-          complianceStatus: "ACTIVE INTERVENTION (CIP Funded)",
-          statusBadge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+          tractName: "North Lawndale / Pulaski Corridor",
+          tractId: "tract-chi-02",
+          heatOffset: "+9.7°F",
+          povertyRate: "33.4%",
+          noVehicle: "38.9%",
+          sviScore: "0.92 (Very High)",
+          equityIndex: 96,
+          complianceStatus: "HIGH PRIORITY",
+          statusBadge: "bg-orange-500/20 text-orange-300 border-orange-500/40"
         },
         {
-          tractName: "Pleasant Grove Central",
-          tractId: "tract-0115",
+          tractName: "South Shore / 79th & Stony Island",
+          tractId: "tract-chi-03",
           heatOffset: "+8.8°F",
-          povertyRate: "34.1%",
-          noVehicle: "29.5%",
+          povertyRate: "31.6%",
+          noVehicle: "32.4%",
           sviScore: "0.89 (High)",
-          equityIndex: 96,
-          complianceStatus: "PARTIAL COVERAGE (Overcrowded)",
+          equityIndex: 92,
+          complianceStatus: "PRIORITY REVIEW",
           statusBadge: "bg-amber-500/20 text-amber-300 border-amber-500/40"
         },
         {
-          tractName: "West Dallas / Singleton Blvd",
-          tractId: "tract-0100",
-          heatOffset: "+7.9°F",
-          povertyRate: "27.5%",
-          noVehicle: "26.4%",
-          sviScore: "0.80 (Moderate-High)",
-          equityIndex: 89,
-          complianceStatus: "ELIGIBLE FOR BRIC GRANT",
-          statusBadge: "bg-blue-500/20 text-blue-300 border-blue-500/40"
+          tractName: "West Garfield Park / Cicero & Madison",
+          tractId: "tract-chi-04",
+          heatOffset: "+8.1°F",
+          povertyRate: "34.2%",
+          noVehicle: "35.1%",
+          sviScore: "0.87 (High)",
+          equityIndex: 90,
+          complianceStatus: "TARGETED DEPLOYMENT",
+          statusBadge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
         }
       ]
     };
   }
 
-  // 4. Cool Pavement Simulation
-  if (q.includes("cool pavement") || q.includes("roi") || q.includes("south dallas")) {
+  if (q.includes("cool pavement") || q.includes("north lawndale") || q.includes("simulate") || q.includes("roi")) {
     return {
-      content: `### 🛣️ BQML Simulation: High-Albedo Cool Pavement Sealcoat (South Dallas Corridor)
+      content: `### 🛣️ BQML Simulation: High-Albedo Cool Pavement Pilot (North Lawndale Corridor)
 
-Simulating the application of high-reflectance titanium oxide-infused slurry coating ($0.42/sq ft) along 4.2 lane-miles of MLK Jr. Blvd & Robert B. Cullum:
+**Scenario:** Cool pavement and shade interventions on the Pulaski corridor to reduce urban heat exposure for bus riders and pedestrians.
 
-- **Surface Temperature Reduction:** $-10.5^\circ\text{F}$ at 2:00 PM peak (from $133.8^\circ\text{F} \rightarrow 123.3^\circ\text{F}$).
-- **Ambient 2-Meter Air Temp Reduction:** $-2.4^\circ\text{F}$ microclimate benefit.
-- **Estimated Heat-Related 911 Call Reduction:** $-28\%$ based on historical empirical regression.
-- **Pavement Lifespan Extension:** +4.5 years due to lower thermal fatigue cracking.
-- **Benefit-Cost Ratio (BCR):** **3.8 : 1** over a 7-year municipal lifecycle.
+- **Projected reduction:** **-3.6°F local ambient** after implementation.
+- **BQML Heat Offset:** **+${contextTract?.heatOffset ?? 9.7}°F** above Chicago regional baseline.
+- **Estimated benefits:** 14-18% improvement in midday thermal comfort and reduced heat stress on waiting riders.
 
-Recommendation: Approved in Bond Proposition D. Contractor procurement scheduled for August 2026.`,
-      structuredType: "roi_simulation",
-      tractId: "tract-0048"
+**Recommendation:** Prioritize cool pavement on the hottest frontage segments and pair with transit shelters and hydration stations.`,
+      structuredType: "simulation_summary",
+      tractId: contextTract?.id || "tract-chi-02"
     };
   }
 
-  // 5. Node click inspection response
-  if (contextTract) {
-    return {
-      content: `### 📍 Spatial Node Telemetry: ${contextTract.name} (${contextTract.tractNumber})
-
-- **BQML Heat Offset:** **+${contextTract.heatOffset}°F** above Dallas regional baseline.
-- **Current Surface Temperature:** **${contextTract.surfaceTemp}°F**
-- **Heat Vulnerability Score:** **${contextTract.bqmlRiskScore} / 10**
-- **Demographics:** Zero-Vehicle: **${contextTract.demographics.noVehicleRate}%** | Senior Pop (>65): **${contextTract.demographics.seniorRate}%** | Tree Canopy: **${contextTract.demographics.treeCanopyCover}%**
-- **Nearest Cooling Facility:** ${contextTract.nearestCenterDist} (${contextTract.coolingCenterNearby ? "Nearby" : "Deficit Zone"})
-- **Historical Hotspot:** ${contextTract.isHistoricalHotspot ? `YES (${contextTract.historicalCalls2025} EMS calls in 2025)` : "No active flag"}
-
-**Strategic Intelligence:**
-${contextTract.notes}
-
-**Recommended Action:**
-${contextTract.recommendedAction}`,
-      structuredType: "tract_card",
-      tract: contextTract
-    };
-  }
-
-  // Default intelligent assistant response
   return {
-    content: `### 🌐 Urban Heat AI Analysis
+    content: `### 🧠 Chicago Urban Heat Planning Response
 
-I have processed your query regarding: **"${query}"** against Dallas municipal spatial layers and BQML climate projections.
+I have processed your query regarding: **"${query}"** against Chicago municipal spatial layers and BQML climate projections.
 
-**Key Model Observations:**
-- Today's thermal envelope peaks between **2:30 PM – 5:15 PM** with surface temperatures reaching up to **136.4°F** in South & Oak Cliff tracts.
-- Emergency services should prioritize non-vehicular transit stops along major bus arteries.
-- Would you like me to:
-  1. Generate a **Candidate Site Card** for this location to push to the Kanban board?
-  2. Simulate the microclimate cooling effect of planting 250 shade trees?
-  3. Dispatch a mobile hydration unit or cooling bus?`,
-    structuredType: "general"
+**Priority focus areas:** 63rd & Halsted, North Lawndale, South Shore, and West Garfield Park.
+
+Use the recommended intervention cards or pick one of the suggested queries to narrow the analysis to cooling center placement, microclimate diagnosis, or environmental justice screening.`,
+    structuredType: "plain_text"
   };
 }

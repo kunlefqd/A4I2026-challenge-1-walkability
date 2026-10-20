@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Navbar from './components/Navbar';
 import MetricsRibbon from './components/MetricsRibbon';
 import HeatMap from './components/Map/HeatMap';
@@ -7,15 +7,17 @@ import AgentWorkspace from './components/AgentWorkspace/AgentWorkspace';
 import KanbanBoard from './components/Kanban/KanbanBoard';
 import DeployTruckModal from './components/Modals/DeployTruckModal';
 
-import { CITIES, DALLAS_TRACTS } from './data/cityData';
+import { CITIES, CHICAGO_TRACTS } from './data/cityData';
 import { INITIAL_ALERTS, INITIAL_AUDIT_LOG } from './data/initialAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
+import { CHICAGO_WEATHER_FALLBACK, fetchChicagoWeather } from './services/weather';
+import { requestAgentResponse } from './services/agent';
 import { CheckCircle2, Bell, Sparkles } from 'lucide-react';
 
 export default function App() {
   // Navigation & Track States
-  const [currentCity, setCurrentCity] = useState(CITIES[0]); // Dallas - Summer Campaign
+  const [currentCity, setCurrentCity] = useState(CITIES[0]); // Chicago - Summer Campaign
   const [currentTrack, setCurrentTrack] = useState('today'); // 'today' | 'budget' | 'decade'
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'kanban'
 
@@ -26,7 +28,7 @@ export default function App() {
   const [showHistoricalHotspots, setShowHistoricalHotspots] = useState(true);
   const [showCanopyDeficit, setShowCanopyDeficit] = useState(false);
   const [heatThreshold, setHeatThreshold] = useState(4.0);
-  const [basemapStyle, setBasemapStyle] = useState('dark');
+  const [basemapStyle, setBasemapStyle] = useState('streets');
   const [simulatedHeatBoost, setSimulatedHeatBoost] = useState(0);
 
   // Agent Workspace & Alerts States
@@ -44,6 +46,85 @@ export default function App() {
 
   // Floating Toast Notification
   const [toastMessage, setToastMessage] = useState(null);
+  const [weather, setWeather] = useState(CHICAGO_WEATHER_FALLBACK);
+  const [liveRiskRows, setLiveRiskRows] = useState([]);
+
+  const CHICAGO_REAL_TRACT_LABELS = {
+    '17031834900': { name: 'South Chicago / Englewood Corridor', area: 'South Side' },
+    '17031670800': { name: 'Chicago Lawn / Englewood', area: 'South Side' },
+    '17031671100': { name: 'Halsted & 63rd Priority Tract', area: 'Englewood' },
+    '17031670300': { name: 'Auburn Gresham / West Englewood', area: 'Auburn Gresham' },
+    '17031670200': { name: 'West Englewood Transit Belt', area: 'West Englewood' },
+    '17031671200': { name: 'Englewood South Side Cluster', area: 'Englewood' },
+    '17031611900': { name: 'Auburn Gresham Heat Zone', area: 'Auburn Gresham' },
+    '17031610300': { name: 'South Side West Corridor', area: 'West Englewood' },
+    '17031650200': { name: 'South Chicago Heat Priority', area: 'South Chicago' },
+    '17031671600': { name: 'South Side Transit Exposure Tract', area: 'Englewood' },
+  };
+
+  const displayedTracts = useMemo(() => {
+    if (!liveRiskRows.length) return CHICAGO_TRACTS;
+
+    return liveRiskRows.slice(0, 10).map((row, index) => {
+      const baseTract = CHICAGO_TRACTS[index % CHICAGO_TRACTS.length];
+      const normalizedHeatHazard = Number(row.normalized_heat_hazard ?? baseTract.normalizedHeatHazard ?? 0.5);
+      const combinedPriorityScore = Number(row.combined_priority_score ?? baseTract.combinedPriorityScore ?? 0.5);
+      const socialVulnerabilityScore = Number(row.social_vulnerability_score ?? baseTract.cdcSviRplThemes ?? 0.5);
+      const noVehicleRate = Number(row.no_vehicle_rate ?? baseTract.demographics.noVehicleRate ?? 30);
+      const povertyRate = Number(row.poverty_rate ?? baseTract.demographics.povertyRate ?? 25);
+      const over65Rate = Number(row.over_65_rate ?? baseTract.demographics.seniorRate ?? 15);
+      const tractMeta = CHICAGO_REAL_TRACT_LABELS[row.geo_id] || { name: `${baseTract.area} Priority Tract`, area: baseTract.area };
+
+      return {
+        ...baseTract,
+        id: row.geo_id || baseTract.id,
+        tractNumber: String(row.geo_id || baseTract.tractNumber),
+        geo_id: row.geo_id || baseTract.tractNumber,
+        name: tractMeta.name,
+        area: tractMeta.area,
+        lat: Number(row.tract_lat ?? baseTract.coordinates?.lat ?? 41.8781),
+        lng: Number(row.tract_lon ?? baseTract.coordinates?.lng ?? -87.6298),
+        heatOffset: Number((normalizedHeatHazard * 11).toFixed(1)),
+        surfaceTemp: Number((row.tract_avg_temp_f ? Number(row.tract_avg_temp_f) : baseTract.surfaceTemp).toFixed(1)),
+        bqmlRiskScore: Number((combinedPriorityScore * 10).toFixed(1)),
+        cdcSviRplThemes: Number(socialVulnerabilityScore.toFixed(2)),
+        normalizedHeatHazard: Number(normalizedHeatHazard.toFixed(4)),
+        combinedPriorityScore: Number(combinedPriorityScore.toFixed(4)),
+        demographics: {
+          ...baseTract.demographics,
+          medianAge: Number(row.median_age ?? baseTract.demographics.medianAge ?? 35),
+          noVehicleRate: Number(noVehicleRate.toFixed(1)),
+          povertyRate: Number(povertyRate.toFixed(1)),
+          seniorRate: Number(over65Rate.toFixed(1)),
+          treeCanopyCover: Number(Math.max(baseTract.demographics.treeCanopyCover || 5, 5).toFixed(1))
+        }
+      };
+    });
+  }, [liveRiskRows]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchChicagoWeather().then((nextWeather) => {
+      if (isMounted) setWeather(nextWeather);
+    }).catch(() => {
+      if (isMounted) setWeather(CHICAGO_WEATHER_FALLBACK);
+    });
+
+    fetch('http://127.0.0.1:8000/api/chicago/risk')
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (!isMounted || !payload || !Array.isArray(payload.rows)) return;
+        setLiveRiskRows(payload.rows.slice(0, 10));
+      })
+      .catch(() => {
+        if (isMounted) setLiveRiskRows([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -55,10 +136,13 @@ export default function App() {
     setSelectedTract(tract);
     if (!tract) return;
 
-    // Build automated telemetry query for the AI Planner Chat
-    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: 32.7481° N, 96.8155° W. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset). What are the top interventions?`;
+    const tractLat = Number.isFinite(tract.lat) ? tract.lat : 41.8781;
+    const tractLon = Number.isFinite(tract.lng) ? tract.lng : -87.6298;
+    const sviValue = typeof tract.cdcSviRplThemes === 'number' ? tract.cdcSviRplThemes.toFixed(2) : 'N/A';
+    const normalizedRisk = typeof tract.normalizedHeatHazard === 'number' ? tract.normalizedHeatHazard.toFixed(2) : 'N/A';
+    const priorityScore = typeof tract.combinedPriorityScore === 'number' ? tract.combinedPriorityScore.toFixed(2) : 'N/A';
+    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: ${tractLat.toFixed(4)}° N, ${tractLon.toFixed(4)}° W. CDC SVI RPL_THEMES = ${sviValue} (higher = more vulnerable); normalized heat hazard = ${normalizedRisk}; combined priority score = ${priorityScore}. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset) under current Chicago conditions (${weather.summary}, ${weather.tempF}°F). What are the top interventions?`;
 
-    // Add user question to chat
     const userMsg = {
       id: `user-tract-${Date.now()}`,
       sender: 'user',
@@ -67,26 +151,42 @@ export default function App() {
       structuredData: null
     };
 
-    // Generate response using BQML engine
-    const response = getAgentResponse(promptText, tract);
-    const agentMsg = {
-      id: `agent-tract-${Date.now()}`,
-      sender: 'agent',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      content: response.content,
-      structuredType: response.structuredType,
-      cards: response.cards,
-      equityMetrics: response.equityMetrics,
-      tract: response.tract
-    };
+    requestAgentResponse({ query: promptText, selectedTract: tract, liveRiskRows })
+      .then((agentPayload) => {
+        const response = agentPayload || getAgentResponse(promptText, tract, liveRiskRows);
+        const agentMsg = {
+          id: `agent-tract-${Date.now()}`,
+          sender: 'agent',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: response.content,
+          structuredType: response.structuredType,
+          cards: response.cards,
+          equityMetrics: response.equityMetrics,
+          tract: response.tract
+        };
+        setChatMessages(prev => [...prev, userMsg, agentMsg]);
+      })
+      .catch(() => {
+        const response = getAgentResponse(promptText, tract, liveRiskRows);
+        const agentMsg = {
+          id: `agent-tract-${Date.now()}`,
+          sender: 'agent',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: response.content,
+          structuredType: response.structuredType,
+          cards: response.cards,
+          equityMetrics: response.equityMetrics,
+          tract: response.tract
+        };
+        setChatMessages(prev => [...prev, userMsg, agentMsg]);
+      });
 
-    setChatMessages(prev => [...prev, userMsg, agentMsg]);
     setActiveWorkspaceTab('chat');
     showToast(`📍 Selected ${tract.name} - Spatial coordinates fed to AI Planner.`);
   };
 
   const handleSelectTractById = (tractId) => {
-    const found = DALLAS_TRACTS.find(t => t.id === tractId);
+    const found = displayedTracts.find(t => t.id === tractId);
     if (found) {
       handleSelectTract(found);
       setCurrentView('dashboard');
@@ -147,7 +247,7 @@ export default function App() {
       equityScore: 96,
       projectedTempReduction: "-6.2°F localized relief",
       tags: ["AI Recommendation", "Resilience Hub"],
-      recommendedBy: "Urban Heat AI - Copilot Recommendation"
+      recommendedBy: "SHADE - Smart Heat Alert & Dispatch Engine"
     };
 
     setKanbanCards(prev => [newCard, ...prev]);
@@ -174,6 +274,8 @@ export default function App() {
         alertCount={alerts.length}
         simulatedHeatBoost={simulatedHeatBoost}
         setSimulatedHeatBoost={setSimulatedHeatBoost}
+        weather={weather}
+        liveRiskRows={liveRiskRows}
         onOpenAlerts={() => {
           setCurrentView('dashboard');
           setActiveWorkspaceTab('alerts');
@@ -226,6 +328,7 @@ export default function App() {
               {/* Interactive Mock Map Component */}
               <HeatMap
                 currentCity={currentCity}
+                tracts={displayedTracts}
                 selectedTract={selectedTract}
                 onSelectTract={handleSelectTract}
                 showCoolingCenters={showCoolingCenters}
@@ -291,9 +394,9 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/80 px-4 lg:px-6 py-2.5 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span>Municipal Urban Heat AI Platform &copy; 2026</span>
+          <span>SHADE | Smart Heat Alert &amp; Dispatch Engine &copy; 2026</span>
           <span>•</span>
-          <span>City of Dallas Office of Resilience & Emergency Operations</span>
+          <span>City of Chicago Office of Climate Resilience & Emergency Operations</span>
         </div>
         <div className="flex items-center gap-4 font-mono text-[11px]">
           <span>BigQuery ML Spatial API</span>

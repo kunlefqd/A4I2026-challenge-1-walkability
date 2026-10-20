@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Plus, Building, TreePine, ShieldCheck } from 'lucide-react';
-import { DALLAS_TRACTS } from '../../data/cityData';
+import { CHICAGO_TRACTS } from '../../data/cityData';
 
 export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
-  const [selectedTractId, setSelectedTractId] = useState(DALLAS_TRACTS[0].id);
+  const [selectedTractId, setSelectedTractId] = useState(CHICAGO_TRACTS[0].id);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Resilience Hub');
   const [cost, setCost] = useState('$500,000');
@@ -12,7 +12,7 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
 
   if (!isOpen) return null;
 
-  const currentTract = DALLAS_TRACTS.find(t => t.id === selectedTractId) || DALLAS_TRACTS[0];
+  const currentTract = CHICAGO_TRACTS.find(t => t.id === selectedTractId) || CHICAGO_TRACTS[0];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -81,7 +81,7 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
               onChange={(e) => setSelectedTractId(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
             >
-              {DALLAS_TRACTS.map((t) => (
+              {CHICAGO_TRACTS.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name} (+{t.heatOffset}°F / Risk: {t.bqmlRiskScore})
                 </option>
@@ -105,7 +105,7 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
             <input
               type="text"
               required
-              placeholder="e.g. Oak Cliff Community Resilience Center Expansion"
+              placeholder="e.g. Englewood Community Resilience Center Expansion"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500"

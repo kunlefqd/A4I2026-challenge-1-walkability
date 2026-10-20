@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
-  DALLAS_TRACTS, 
-  COOLING_CENTERS, 
-  HISTORICAL_HOTSPOTS 
+  CHICAGO_TRACTS,
+  COOLING_CENTERS,
+  HISTORICAL_HOTSPOTS
 } from '../../data/cityData';
 import { 
   Building2, 
@@ -23,6 +23,7 @@ import {
 
 export default function HeatMap({
   currentCity,
+  tracts = CHICAGO_TRACTS,
   selectedTract,
   onSelectTract,
   showCoolingCenters,
@@ -35,10 +36,100 @@ export default function HeatMap({
   onAddToKanban,
   simulatedHeatBoost
 }) {
+  const mapRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [hoveredTract, setHoveredTract] = useState(null);
   const [hoveredCenter, setHoveredCenter] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    if (!mapsApiKey || !mapRef.current || typeof window === 'undefined') return;
+
+    const ensureMapsScript = () => {
+      const existingScript = document.getElementById('google-maps-script');
+      if (existingScript) {
+        if (window.google?.maps) setMapLoaded(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = 'google-maps-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&callback=initChicagoHeatMap`;
+      script.async = true;
+      script.defer = true;
+      window.initChicagoHeatMap = () => setMapLoaded(true);
+      document.head.appendChild(script);
+    };
+
+    ensureMapsScript();
+  }, [mapsApiKey]);
+
+  useEffect(() => {
+    if (!mapRef.current || !window.google?.maps || !mapsApiKey) return;
+
+    const darkStyles = [
+      { elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1120' }] },
+      { featureType: 'road', stylers: [{ color: '#1e293b' }, { visibility: 'simplified' }] },
+      { featureType: 'water', stylers: [{ color: '#0f766e' }, { opacity: 0.4 }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] }
+    ];
+
+    const lightStyles = [
+      { featureType: 'water', stylers: [{ color: '#dbeafe' }] },
+      { featureType: 'road', stylers: [{ color: '#f8fafc' }, { visibility: 'simplified' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#0f172a' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] }
+    ];
+
+    const selectedStyles = basemapStyle === 'dark' ? darkStyles : basemapStyle === 'radar' ? darkStyles : lightStyles;
+
+    let map = new window.google.maps.Map(mapRef.current, {
+      center: { lat: 41.8781, lng: -87.6298 },
+      zoom: 10,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      disableDefaultUI: true,
+      styles: selectedStyles,
+      gestureHandling: 'greedy'
+    });
+
+    const tractLocations = (tracts || [])
+      .filter((tract) => Number.isFinite(tract.lat) && Number.isFinite(tract.lng))
+      .slice(0, 12);
+
+    tractLocations.forEach((tract) => {
+      const color = tract.heatOffset >= 8.5 ? '#ef4444' : tract.heatOffset >= 6 ? '#f97316' : '#fbbf24';
+      const marker = new window.google.maps.Marker({
+        position: { lat: tract.lat, lng: tract.lng },
+        map,
+        title: tract.name,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 7,
+          fillColor: color,
+          fillOpacity: 0.95,
+          strokeColor: '#f8fafc',
+          strokeWeight: 2
+        }
+      });
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `<div style="color:#0f172a;font-family:monospace;font-size:12px;padding:4px 8px"><strong>${tract.name}</strong><br/>Risk ${tract.bqmlRiskScore ?? tract.heatOffset?.toFixed(1) ?? 'n/a'} / Heat +${tract.heatOffset?.toFixed(1) ?? '0.0'}°F</div>`
+      });
+
+      marker.addListener('click', () => infoWindow.open({ anchor: marker, map }));
+    });
+
+    return () => {
+      map = null;
+    };
+  }, [mapLoaded, mapsApiKey, tracts, basemapStyle]);
 
   // Helper to get heat color based on BQML offset + simulation boost
   const getHeatFillColor = (offset, isHovered, isSelected) => {
@@ -83,7 +174,7 @@ export default function HeatMap({
         </span>
         <span className="text-slate-500 text-xs">|</span>
         <span className="text-[11px] font-mono text-orange-400">
-          BQML Satellite Surface Grid
+          {mapsApiKey ? 'Google Maps + BQML Surface Grid' : 'BQML Satellite Surface Grid'}
         </span>
       </div>
 
@@ -114,12 +205,20 @@ export default function HeatMap({
 
       {/* Main Interactive SVG Map Canvas */}
       <div className="relative flex-1 w-full h-full overflow-hidden cursor-crosshair">
+        {mapsApiKey && (
+          <div
+            ref={mapRef}
+            className="absolute inset-0 opacity-100 pointer-events-none z-10"
+            aria-label="Google Maps background for Chicago"
+          />
+        )}
         <svg
           viewBox="0 0 800 580"
-          className="w-full h-full transition-transform duration-300"
+          className="absolute inset-0 w-full h-full transition-transform duration-300 z-20"
           style={{
             transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-            transformOrigin: 'center center'
+            transformOrigin: 'center center',
+            opacity: 0.9
           }}
         >
           <defs>
@@ -153,10 +252,14 @@ export default function HeatMap({
           </defs>
 
           {/* Background Map Layer */}
-          <rect width="800" height="580" fill={basemapStyle === 'radar' ? '#060a12' : '#0a0e17'} />
-          <rect width="800" height="580" fill="url(#grid)" />
+          <rect
+            width="800"
+            height="580"
+            fill={basemapStyle === 'radar' ? '#060a12' : basemapStyle === 'dark' ? '#0a0e17' : '#f8fafc'}
+          />
+          <rect width="800" height="580" fill={basemapStyle === 'streets' ? 'rgba(148, 163, 184, 0.08)' : 'url(#grid)'} />
 
-          {/* Trinity River & Green Belt Mockup */}
+          {/* Chicago River & Green Belt Mockup */}
           <g opacity="0.35">
             <path
               d="M 160 520 C 230 420 280 340 320 280 C 370 200 390 120 400 30"
@@ -174,28 +277,28 @@ export default function HeatMap({
               strokeLinecap="round"
             />
             <text x="270" y="320" fill="#38bdf8" fontSize="10" fontFamily="monospace" opacity="0.7" transform="rotate(-55 270 320)">
-              Trinity River Corridor
+              Chicago River Corridor
             </text>
           </g>
 
-          {/* Highway Corridors (I-30, I-35E, Loop 12) */}
+          {/* Highway Corridors (I-90, I-94, Dan Ryan) */}
           <g opacity="0.25" stroke="#64748b" strokeWidth="2.5" fill="none">
-            {/* I-30 East-West */}
+            {/* I-90 East-West */}
             <path d="M 50 310 Q 380 290 750 310" strokeDasharray="6,4" />
-            <text x="710" y="300" fill="#94a3b8" fontSize="9" fontFamily="monospace">I-30</text>
+            <text x="710" y="300" fill="#94a3b8" fontSize="9" fontFamily="monospace">I-90</text>
 
-            {/* I-35E North-South */}
+            {/* I-94 North-South */}
             <path d="M 390 50 L 370 540" strokeDasharray="6,4" />
-            <text x="375" y="70" fill="#94a3b8" fontSize="9" fontFamily="monospace">I-35E</text>
+            <text x="375" y="70" fill="#94a3b8" fontSize="9" fontFamily="monospace">I-94</text>
 
-            {/* Loop 12 */}
+            {/* Dan Ryan */}
             <path d="M 100 480 Q 20 250 140 100 Q 400 40 700 120 Q 770 350 680 500" strokeWidth="1.5" strokeDasharray="4,4" />
-            <text x="140" y="90" fill="#94a3b8" fontSize="9" fontFamily="monospace">Loop 12</text>
+            <text x="140" y="90" fill="#94a3b8" fontSize="9" fontFamily="monospace">Dan Ryan</text>
           </g>
 
           {/* Heat Offset Tract Polygons */}
           <g id="tracts-layer">
-            {DALLAS_TRACTS.map((tract) => {
+            {tracts.map((tract) => {
               const effectiveOffset = tract.heatOffset + simulatedHeatBoost;
               const isFilteredOut = effectiveOffset < heatThreshold;
               const isSelected = selectedTract?.id === tract.id;
@@ -293,7 +396,7 @@ export default function HeatMap({
                   transform={`translate(${hotspot.coordinates.x}, ${hotspot.coordinates.y})`}
                   className="cursor-pointer group"
                   onClick={() => {
-                    const targetTract = DALLAS_TRACTS.find(t => t.id === hotspot.tractId);
+                    const targetTract = tracts.find(t => t.id === hotspot.tractId);
                     if (targetTract) onSelectTract(targetTract);
                   }}
                 >
@@ -337,7 +440,7 @@ export default function HeatMap({
                     onMouseEnter={() => setHoveredCenter(center)}
                     onMouseLeave={() => setHoveredCenter(null)}
                     onClick={() => {
-                      const targetTract = DALLAS_TRACTS.find(t => t.id === center.tractId);
+                      const targetTract = tracts.find(t => t.id === center.tractId);
                       if (targetTract) onSelectTract(targetTract);
                     }}
                   >

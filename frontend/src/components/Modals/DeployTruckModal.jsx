@@ -26,7 +26,7 @@ export default function DeployTruckModal({
 
   if (!isOpen) return null;
 
-  const tractName = targetAlert?.tractName || targetTract?.name || "South Dallas Corridor";
+  const tractName = targetAlert?.tractName || targetTract?.name || "Chicago Heat Corridor";
   const tractId = targetAlert?.tractId || targetTract?.id || "tract-0089";
 
   const handleDispatch = (e) => {

@@ -19,6 +19,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { SUGGESTED_PROMPT_CHIPS, getAgentResponse } from '../../data/aiKnowledge';
+import { requestAgentResponse } from '../../services/agent';
 
 export default function ChatTab({
   chatMessages,
@@ -40,11 +41,10 @@ export default function ChatTab({
     scrollToBottom();
   }, [chatMessages, isTyping]);
 
-  const handleSend = (textToSend = null) => {
+  const handleSend = async (textToSend = null) => {
     const query = (textToSend || inputQuery).trim();
     if (!query) return;
 
-    // Add user message
     const userMsg = {
       id: `user-${Date.now()}`,
       sender: 'user',
@@ -57,9 +57,9 @@ export default function ChatTab({
     setInputQuery('');
     setIsTyping(true);
 
-    // Simulate AI reasoning delay
-    setTimeout(() => {
-      const response = getAgentResponse(query, selectedTract);
+    try {
+      const agentPayload = await requestAgentResponse({ query, selectedTract });
+      const response = agentPayload || getAgentResponse(query, selectedTract);
       const agentMsg = {
         id: `agent-${Date.now()}`,
         sender: 'agent',
@@ -72,8 +72,22 @@ export default function ChatTab({
       };
 
       setChatMessages(prev => [...prev, agentMsg]);
+    } catch (error) {
+      const response = getAgentResponse(query, selectedTract);
+      const agentMsg = {
+        id: `agent-${Date.now()}`,
+        sender: 'agent',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: response.content,
+        structuredType: response.structuredType,
+        cards: response.cards,
+        equityMetrics: response.equityMetrics,
+        tract: response.tract
+      };
+      setChatMessages(prev => [...prev, agentMsg]);
+    } finally {
       setIsTyping(false);
-    }, 650);
+    }
   };
 
   const handleChipClick = (chipQuery) => {
@@ -174,7 +188,7 @@ export default function ChatTab({
               {/* Header meta */}
               <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] text-slate-400 font-mono">
                 <span className={msg.sender === 'user' ? 'text-orange-200 font-bold' : 'text-orange-400 font-bold'}>
-                  {msg.sender === 'user' ? 'City Operations Director' : 'Urban Heat AI (Gemini 3.8)'}
+                  {msg.sender === 'user' ? 'City Operations Director' : 'SHADE (Gemini 3.8)'}
                 </span>
                 <span>{msg.timestamp}</span>
               </div>
@@ -316,7 +330,7 @@ export default function ChatTab({
                   </div>
 
                   <div className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-200">
-                    ✓ <strong>Equity Finding:</strong> Priority allocation to 4th & Marsalis and South Dallas satisfies Federal Justice40 initiatives and unlocks Title VI federal matching funds.
+                    ✓ <strong>Equity Finding:</strong> Priority allocation to 63rd & Halsted and North Lawndale satisfies Federal Justice40 initiatives and CDC SVI vulnerability screening, and unlocks Title VI federal matching funds.
                   </div>
                 </div>
               )}

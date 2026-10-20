@@ -41,9 +41,9 @@ export default function MapControls({
             onChange={(e) => setBasemapStyle(e.target.value)}
             className="bg-slate-800 border border-slate-700 text-slate-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none"
           >
+            <option value="streets">Light Streets</option>
             <option value="dark">Civic Dark</option>
             <option value="radar">Thermal Radar</option>
-            <option value="streets">Grid Lines</option>
           </select>
         </div>
       </div>
