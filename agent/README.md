@@ -1,24 +1,54 @@
-# Your agent goes here
+# Google ADK Chicago Heat Planner
 
-This folder is empty on purpose.
+This folder now contains a working Google ADK agent scaffold for the Chicago heat resilience challenge.
 
-Everything else in this repository exists so that you don't spend your morning on setup:
-the data is sourced, the licensing is checked, the load process is written, and the
-exploration queries are ready to run. That is the on-ramp.
+## What it does
 
-The agent is the part that's actually yours. We haven't written a scaffold, a starter
-class, or a "fill in the blanks" template, because the design decisions you make here are
-what you'll be judged on and what you'll demo.
+The root agent is configured for the Chicago use case and exposes two tools:
 
-## One requirement worth repeating
+- `query_chicago_risk(limit=10)`
+  - Calls BigQuery and returns the top Chicago tract-risk rows from `a4i_climate.tract_heat_risk`.
+- `get_chicago_weather_summary()`
+  - Pulls current Chicago weather conditions from Open-Meteo and falls back safely if the API is unavailable.
 
-Your agent must **call** your BigQuery ML prediction, not just query historical rows. A
-tool you built—a Python function tool, or your own MCP Toolbox definition—that runs `ML.PREDICT`
-(or better, `ML.EXPLAIN_PREDICT`) against the model your data lane trains is the shape most teams
-will land on.
+## How to run it with ADK
 
-The per-feature attributions that come back from `ML.EXPLAIN_PREDICT` are what turn a
-location into a recommendation a city planner can defend. Don't treat the explanation as
-a reporting step at the end—it's the product.
+From the repo root:
 
-Build it however your team works best. Delete this file when you do.
+```bash
+cd /config/Hackathon/A4I2026-challenge-1-walkability.worktrees/readme-operations-and-objectives
+adk run agent
+```
+
+Or if you want to start the ADK web UI:
+
+```bash
+adk web
+```
+
+## Required environment
+
+Set the following in your shell or a project `.env` before starting the agent:
+
+```bash
+export GOOGLE_CLOUD_PROJECT=qwiklabs-gcp-04-2bc40033bbb7
+export GOOGLE_CLOUD_LOCATION=us-central1
+export GOOGLE_API_KEY=your_api_key_here
+```
+
+The project automatically loads a root `.env` file (and the frontend `.env.local` if present), so the ADK runtime can pick up credentials without hard-coding them into source.
+
+If you are using the repo locally, create a root `.env` from the repo pattern or a `.env.example` if available, then start the server with the same environment loaded.
+
+The project uses the active Google Cloud project for BigQuery reads, and the agent uses the Gemini model through Google ADK.
+
+## Example prompts
+
+- "Which tracts are the highest priority for immediate cooling support?"
+- "What is the current heat risk in Chicago today?"
+- "Which neighborhoods need action first given vulnerability and heat exposure?"
+- "What operations should we prioritize this afternoon?"
+
+## Notes
+
+This is intentionally aligned with the challenge’s `BigQuery ML + agentic reasoning` model: the agent calls tools, not just summarises static data, and the recommendations are grounded in real Chicago risk records.
