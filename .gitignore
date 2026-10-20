@@ -14,6 +14,11 @@ env/
 service-account*.json
 credentials.json
 .env
+.env.local
+
+# Node / Vite
+node_modules/
+.vite/
 
 # OS
 .DS_Store
