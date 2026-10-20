@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from './components/Navbar';
 import MetricsRibbon from './components/MetricsRibbon';
 import HeatMap from './components/Map/HeatMap';
@@ -7,8 +7,11 @@ import AgentWorkspace from './components/AgentWorkspace/AgentWorkspace';
 import KanbanBoard from './components/Kanban/KanbanBoard';
 import DeployTruckModal from './components/Modals/DeployTruckModal';
 
-import { CITIES, CHICAGO_TRACTS } from './data/cityData';
-import { INITIAL_ALERTS, INITIAL_AUDIT_LOG } from './data/initialAlerts';
+import { CITIES } from './data/cityData';
+import { useHeatSummary, useTractData } from './lib/useTractData';
+import { computeLiveMetrics } from './lib/liveMetrics';
+import { fmtOffset, fmtPct, fmtTemp } from './lib/tractAdapter';
+import { buildVulnerabilityAlerts } from './lib/vulnerabilityAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
 import { CHICAGO_WEATHER_FALLBACK, fetchChicagoWeather } from './services/weather';
@@ -21,12 +24,23 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState('today'); // 'today' | 'budget' | 'decade'
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'kanban'
 
+  // Live data from the tract heat-risk API (bundled sample if it is unreachable)
+  const { rows: tractRows, tracts: liveTracts, source: tractSource } = useTractData();
+  const heatSummary = useHeatSummary();
+  const liveMetrics = useMemo(() => computeLiveMetrics(liveTracts, heatSummary), [liveTracts, heatSummary]);
+  // Raw tract_heat_risk rows, highest combined priority first, for the ADK agent and its local fallback.
+  const liveRiskRows = useMemo(() => (tractRows || [])
+    .filter(row => row.combined_priority_score != null)
+    .sort((a, b) => Number(b.combined_priority_score) - Number(a.combined_priority_score))
+    .slice(0, 200), [tractRows]);
+
   // Spatial Map States
   const [selectedTract, setSelectedTract] = useState(null);
   const [showCoolingCenters, setShowCoolingCenters] = useState(true);
   const [showVulnerableTracts, setShowVulnerableTracts] = useState(true);
   const [showHistoricalHotspots, setShowHistoricalHotspots] = useState(true);
   const [showCanopyDeficit, setShowCanopyDeficit] = useState(false);
+  const [showVulnerabilitySurface, setShowVulnerabilitySurface] = useState(true);
   const [heatThreshold, setHeatThreshold] = useState(4.0);
   const [basemapStyle, setBasemapStyle] = useState('streets');
   const [simulatedHeatBoost, setSimulatedHeatBoost] = useState(0);
@@ -34,8 +48,17 @@ export default function App() {
   // Agent Workspace & Alerts States
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('chat'); // 'chat' | 'alerts'
   const [chatMessages, setChatMessages] = useState(INITIAL_CHAT_MESSAGES);
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
-  const [auditLog, setAuditLog] = useState(INITIAL_AUDIT_LOG);
+  const [alerts, setAlerts] = useState([]);
+  // Alert history starts empty and fills as alerts are acted on (see handleConfirmDispatch).
+  const [auditLog, setAuditLog] = useState([]);
+
+  // Alerts are the most vulnerable live tracts. Seed them once, so dismissed alerts stay dismissed.
+  const alertsSeeded = useRef(false);
+  useEffect(() => {
+    if (alertsSeeded.current || !liveTracts?.length) return;
+    alertsSeeded.current = true;
+    setAlerts(buildVulnerabilityAlerts(liveTracts));
+  }, [liveTracts]);
 
   // Kanban Board States
   const [kanbanCards, setKanbanCards] = useState(INITIAL_KANBAN_CARDS);
@@ -47,60 +70,6 @@ export default function App() {
   // Floating Toast Notification
   const [toastMessage, setToastMessage] = useState(null);
   const [weather, setWeather] = useState(CHICAGO_WEATHER_FALLBACK);
-  const [liveRiskRows, setLiveRiskRows] = useState([]);
-
-  const CHICAGO_REAL_TRACT_LABELS = {
-    '17031834900': { name: 'South Chicago / Englewood Corridor', area: 'South Side' },
-    '17031670800': { name: 'Chicago Lawn / Englewood', area: 'South Side' },
-    '17031671100': { name: 'Halsted & 63rd Priority Tract', area: 'Englewood' },
-    '17031670300': { name: 'Auburn Gresham / West Englewood', area: 'Auburn Gresham' },
-    '17031670200': { name: 'West Englewood Transit Belt', area: 'West Englewood' },
-    '17031671200': { name: 'Englewood South Side Cluster', area: 'Englewood' },
-    '17031611900': { name: 'Auburn Gresham Heat Zone', area: 'Auburn Gresham' },
-    '17031610300': { name: 'South Side West Corridor', area: 'West Englewood' },
-    '17031650200': { name: 'South Chicago Heat Priority', area: 'South Chicago' },
-    '17031671600': { name: 'South Side Transit Exposure Tract', area: 'Englewood' },
-  };
-
-  const displayedTracts = useMemo(() => {
-    if (!liveRiskRows.length) return CHICAGO_TRACTS;
-
-    return liveRiskRows.slice(0, 10).map((row, index) => {
-      const baseTract = CHICAGO_TRACTS[index % CHICAGO_TRACTS.length];
-      const normalizedHeatHazard = Number(row.normalized_heat_hazard ?? baseTract.normalizedHeatHazard ?? 0.5);
-      const combinedPriorityScore = Number(row.combined_priority_score ?? baseTract.combinedPriorityScore ?? 0.5);
-      const socialVulnerabilityScore = Number(row.social_vulnerability_score ?? baseTract.cdcSviRplThemes ?? 0.5);
-      const noVehicleRate = Number(row.no_vehicle_rate ?? baseTract.demographics.noVehicleRate ?? 30);
-      const povertyRate = Number(row.poverty_rate ?? baseTract.demographics.povertyRate ?? 25);
-      const over65Rate = Number(row.over_65_rate ?? baseTract.demographics.seniorRate ?? 15);
-      const tractMeta = CHICAGO_REAL_TRACT_LABELS[row.geo_id] || { name: `${baseTract.area} Priority Tract`, area: baseTract.area };
-
-      return {
-        ...baseTract,
-        id: row.geo_id || baseTract.id,
-        tractNumber: String(row.geo_id || baseTract.tractNumber),
-        geo_id: row.geo_id || baseTract.tractNumber,
-        name: tractMeta.name,
-        area: tractMeta.area,
-        lat: Number(row.tract_lat ?? baseTract.coordinates?.lat ?? 41.8781),
-        lng: Number(row.tract_lon ?? baseTract.coordinates?.lng ?? -87.6298),
-        heatOffset: Number((normalizedHeatHazard * 11).toFixed(1)),
-        surfaceTemp: Number((row.tract_avg_temp_f ? Number(row.tract_avg_temp_f) : baseTract.surfaceTemp).toFixed(1)),
-        bqmlRiskScore: Number((combinedPriorityScore * 10).toFixed(1)),
-        cdcSviRplThemes: Number(socialVulnerabilityScore.toFixed(2)),
-        normalizedHeatHazard: Number(normalizedHeatHazard.toFixed(4)),
-        combinedPriorityScore: Number(combinedPriorityScore.toFixed(4)),
-        demographics: {
-          ...baseTract.demographics,
-          medianAge: Number(row.median_age ?? baseTract.demographics.medianAge ?? 35),
-          noVehicleRate: Number(noVehicleRate.toFixed(1)),
-          povertyRate: Number(povertyRate.toFixed(1)),
-          seniorRate: Number(over65Rate.toFixed(1)),
-          treeCanopyCover: Number(Math.max(baseTract.demographics.treeCanopyCover || 5, 5).toFixed(1))
-        }
-      };
-    });
-  }, [liveRiskRows]);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,16 +79,6 @@ export default function App() {
     }).catch(() => {
       if (isMounted) setWeather(CHICAGO_WEATHER_FALLBACK);
     });
-
-    fetch('http://127.0.0.1:8000/api/chicago/risk')
-      .then((response) => response.ok ? response.json() : null)
-      .then((payload) => {
-        if (!isMounted || !payload || !Array.isArray(payload.rows)) return;
-        setLiveRiskRows(payload.rows.slice(0, 10));
-      })
-      .catch(() => {
-        if (isMounted) setLiveRiskRows([]);
-      });
 
     return () => {
       isMounted = false;
@@ -136,12 +95,9 @@ export default function App() {
     setSelectedTract(tract);
     if (!tract) return;
 
-    const tractLat = Number.isFinite(tract.lat) ? tract.lat : 41.8781;
-    const tractLon = Number.isFinite(tract.lng) ? tract.lng : -87.6298;
-    const sviValue = typeof tract.cdcSviRplThemes === 'number' ? tract.cdcSviRplThemes.toFixed(2) : 'N/A';
-    const normalizedRisk = typeof tract.normalizedHeatHazard === 'number' ? tract.normalizedHeatHazard.toFixed(2) : 'N/A';
-    const priorityScore = typeof tract.combinedPriorityScore === 'number' ? tract.combinedPriorityScore.toFixed(2) : 'N/A';
-    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: ${tractLat.toFixed(4)}° N, ${tractLon.toFixed(4)}° W. CDC SVI RPL_THEMES = ${sviValue} (higher = more vulnerable); normalized heat hazard = ${normalizedRisk}; combined priority score = ${priorityScore}. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset) under current Chicago conditions (${weather.summary}, ${weather.tempF}°F). What are the top interventions?`;
+    // Build automated telemetry query for the AI Planner Chat
+    const d = tract.demographics;
+    const promptText = `Inspecting ${tract.name} (GEOID ${tract.tractNumber}, ${tract.area}). Lat/Lng: ${tract.lat.toFixed(4)}° N, ${Math.abs(tract.lng).toFixed(4)}° W. Social vulnerability score ${tract.socialVulnerability.toFixed(2)}; ${d.population.toLocaleString()} residents, poverty ${fmtPct(d.povertyRate)}, zero-car households ${fmtPct(d.noVehicleRate)}, age 65+ ${fmtPct(d.seniorRate)}. Average afternoon temperature ${fmtTemp(tract.surfaceTemp)} (${fmtOffset(tract.heatOffset)} vs city average). Current Chicago conditions: ${weather.summary}, ${weather.tempF}°F (feels like ${weather.feelsLikeF}°F). What are the top interventions?`;
 
     const userMsg = {
       id: `user-tract-${Date.now()}`,
@@ -186,7 +142,8 @@ export default function App() {
   };
 
   const handleSelectTractById = (tractId) => {
-    const found = displayedTracts.find(t => t.id === tractId);
+    // Agent recommendation cards carry the bare GEOID; map and Kanban use the tract id.
+    const found = liveTracts?.find(t => t.id === tractId || t.tractNumber === String(tractId));
     if (found) {
       handleSelectTract(found);
       setCurrentView('dashboard');
@@ -234,17 +191,17 @@ export default function App() {
       tractId: cardOrTract.id,
       tractName: cardOrTract.name,
       category: "Resilience Hub",
-      bqmlRiskScore: cardOrTract.bqmlRiskScore || 9.0,
-      heatOffset: `+${cardOrTract.heatOffset || 8.5}°F`,
+      bqmlRiskScore: cardOrTract.bqmlRiskScore ?? 'n/a',
+      heatOffset: fmtOffset(cardOrTract.heatOffset),
       demographics: {
-        medianAge: cardOrTract.demographics?.medianAge || 38,
-        noVehicleRate: `${cardOrTract.demographics?.noVehicleRate || 35}%`,
-        povertyRate: `${cardOrTract.demographics?.povertyRate || 32}%`,
-        treeCanopy: `${cardOrTract.demographics?.treeCanopyCover || 8}%`
+        medianAge: cardOrTract.demographics?.medianAge ?? 'n/a',
+        noVehicleRate: fmtPct(cardOrTract.demographics?.noVehicleRate),
+        povertyRate: fmtPct(cardOrTract.demographics?.povertyRate),
+        treeCanopy: fmtPct(cardOrTract.demographics?.treeCanopyCover)
       },
       estimatedCost: "$650,000",
       fundingSource: "Capital Improvement Program (CIP)",
-      equityScore: 96,
+      equityScore: cardOrTract.socialVulnerability != null ? Math.min(99, Math.round(cardOrTract.socialVulnerability * 100)) : 96,
       projectedTempReduction: "-6.2°F localized relief",
       tags: ["AI Recommendation", "Resilience Hub"],
       recommendedBy: "SHADE - Smart Heat Alert & Dispatch Engine"
@@ -271,6 +228,7 @@ export default function App() {
       {/* METRICS & SITUATIONAL AWARENESS RIBBON */}
       <MetricsRibbon
         currentCity={currentCity}
+        liveMetrics={liveMetrics}
         alertCount={alerts.length}
         simulatedHeatBoost={simulatedHeatBoost}
         setSimulatedHeatBoost={setSimulatedHeatBoost}
@@ -295,8 +253,8 @@ export default function App() {
           </span>
         </div>
         <div className="hidden lg:flex items-center gap-3">
-          <span>BigQuery ML Model: <b>UHI_Landsat_ACS_v4</b></span>
-          <span className="text-emerald-400">Confidence: 96.8%</span>
+          <span>AI Model: <b>Gemini 2.5 Flash</b></span>
+          <span>Data: <b>BigQuery</b></span>
         </div>
       </div>
 
@@ -319,6 +277,8 @@ export default function App() {
                 setShowHistoricalHotspots={setShowHistoricalHotspots}
                 showCanopyDeficit={showCanopyDeficit}
                 setShowCanopyDeficit={setShowCanopyDeficit}
+                showVulnerabilitySurface={showVulnerabilitySurface}
+                setShowVulnerabilitySurface={setShowVulnerabilitySurface}
                 heatThreshold={heatThreshold}
                 setHeatThreshold={setHeatThreshold}
                 basemapStyle={basemapStyle}
@@ -328,13 +288,15 @@ export default function App() {
               {/* Interactive Mock Map Component */}
               <HeatMap
                 currentCity={currentCity}
-                tracts={displayedTracts}
+                tracts={liveTracts}
+                tractSource={tractSource}
                 selectedTract={selectedTract}
                 onSelectTract={handleSelectTract}
                 showCoolingCenters={showCoolingCenters}
                 showVulnerableTracts={showVulnerableTracts}
                 showHistoricalHotspots={showHistoricalHotspots}
                 showCanopyDeficit={showCanopyDeficit}
+                showVulnerabilitySurface={showVulnerabilitySurface}
                 heatThreshold={heatThreshold}
                 basemapStyle={basemapStyle}
                 onDeployTruck={handleDeployTruck}
@@ -344,8 +306,10 @@ export default function App() {
 
             </div>
 
-            {/* RIGHT COLUMN: Agent Workspace (40% width = 5/12 cols on desktop) */}
-            <div className="lg:col-span-5 flex flex-col">
+            {/* RIGHT COLUMN: Agent Workspace (40% width = 5/12 cols on desktop).
+                On desktop it stretches to the map column's height; the workspace is absolutely
+                positioned inside so a long chat scrolls instead of making the row taller. */}
+            <div className="lg:col-span-5 flex flex-col lg:self-stretch lg:relative lg:min-h-[640px]">
               <AgentWorkspace
                 activeTab={activeWorkspaceTab}
                 setActiveTab={setActiveWorkspaceTab}
@@ -399,9 +363,9 @@ export default function App() {
           <span>City of Chicago Office of Climate Resilience & Emergency Operations</span>
         </div>
         <div className="flex items-center gap-4 font-mono text-[11px]">
-          <span>BigQuery ML Spatial API</span>
-          <span>Landsat-9 Surface Temp</span>
-          <span>Justice40 Audited</span>
+          <span>Gemini 2.5 Flash</span>
+          <span>BigQuery</span>
+          <span>NOAA/CAPA Heat Watch</span>
         </div>
       </footer>
 

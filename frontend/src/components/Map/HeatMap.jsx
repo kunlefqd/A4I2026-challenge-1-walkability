@@ -1,9 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { 
-  CHICAGO_TRACTS,
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
   COOLING_CENTERS,
-  HISTORICAL_HOTSPOTS
+  HISTORICAL_HOTSPOTS,
+  MAP_VIEWBOX
 } from '../../data/cityData';
+import useGoogleMapOverlay from './useGoogleMapOverlay';
+import useVulnerabilitySurface, { RPL_GRADIENT_CSS, scoreColor } from './useVulnerabilitySurface';
+import useTractMarkers from './useTractMarkers';
+import { fmtOffset, fmtPct, fmtTemp, isVulnerableTract } from '../../lib/tractAdapter';
 import { 
   Building2, 
   Flame, 
@@ -23,142 +28,109 @@ import {
 
 export default function HeatMap({
   currentCity,
-  tracts = CHICAGO_TRACTS,
+  tracts,
+  tractSource,
   selectedTract,
   onSelectTract,
   showCoolingCenters,
   showVulnerableTracts,
   showHistoricalHotspots,
-  showCanopyDeficit,
-  heatThreshold,
+  showVulnerabilitySurface,
   basemapStyle,
   onDeployTruck,
-  onAddToKanban,
-  simulatedHeatBoost
+  onAddToKanban
 }) {
-  const mapRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [hoveredTract, setHoveredTract] = useState(null);
   const [hoveredCenter, setHoveredCenter] = useState(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const mapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0, width: 800 });
+  const mapDivRef = useRef(null);
+  const pointerDownRef = useRef(null);
 
+  // Real Google basemap with the SVG layer georeferenced on top; falls back to
+  // the schematic SVG when no API key is configured or the API fails to load.
+  const { map, overlayEl, scale, status: mapStatus, fitToBounds } = useGoogleMapOverlay(mapDivRef, basemapStyle);
+  const geoMode = Boolean(overlayEl) && mapStatus === 'ready';
+
+  // Smooth social_vulnerability_score surface from the live tracts; needs real coordinates, so geo mode only.
+  // Its bounds and score range also frame the map and colour the tract dots.
+  const { bounds: dataBounds, range: scoreRange } = useVulnerabilitySurface(map, showVulnerabilitySurface, tracts);
+
+  // Frame the live tracts once they load (the schematic grid's bounds until then).
+  const fitToData = () => {
+    if (dataBounds) map.fitBounds(dataBounds, 40);
+    else fitToBounds();
+  };
   useEffect(() => {
-    if (!mapsApiKey || !mapRef.current || typeof window === 'undefined') return;
+    if (geoMode) fitToData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoMode, dataBounds]);
 
-    const ensureMapsScript = () => {
-      const existingScript = document.getElementById('google-maps-script');
-      if (existingScript) {
-        if (window.google?.maps) setMapLoaded(true);
-        return;
-      }
+  // Live tracts as clickable dots on the Google map.
+  useTractMarkers(geoMode ? map : null, tracts, {
+    range: scoreRange,
+    selectedId: selectedTract?.id,
+    hoveredId: hoveredTract?.id,
+    highlightVulnerable: showVulnerableTracts,
+    onSelect: onSelectTract,
+    onHover: setHoveredTract,
+  });
 
-      const script = document.createElement('script');
-      script.id = 'google-maps-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&callback=initChicagoHeatMap`;
-      script.async = true;
-      script.defer = true;
-      window.initChicagoHeatMap = () => setMapLoaded(true);
-      document.head.appendChild(script);
-    };
+  // Without a basemap, lay the same dots out on the schematic SVG (equirectangular, aspect kept).
+  const projectToSchematic = useMemo(() => {
+    if (!tracts?.length) return null;
+    const lats = tracts.map(t => t.lat);
+    const lngs = tracts.map(t => t.lng);
+    const north = Math.max(...lats), south = Math.min(...lats);
+    const west = Math.min(...lngs), east = Math.max(...lngs);
+    const kx = Math.cos(((north + south) / 2) * Math.PI / 180);
+    const pad = 30;
+    const s = Math.min(
+      (MAP_VIEWBOX.width - 2 * pad) / ((east - west) * kx || 1),
+      (MAP_VIEWBOX.height - 2 * pad) / ((north - south) || 1)
+    );
+    const ox = (MAP_VIEWBOX.width - (east - west) * kx * s) / 2;
+    const oy = (MAP_VIEWBOX.height - (north - south) * s) / 2;
+    return t => ({ x: ox + (t.lng - west) * kx * s, y: oy + (north - t.lat) * s });
+  }, [tracts]);
 
-    ensureMapsScript();
-  }, [mapsApiKey]);
+  // Cooling centers and hotspots: their georeferenced spot in geo mode, the tracts' projection on the schematic.
+  const pinPosition = (item) => (!geoMode && projectToSchematic ? projectToSchematic(item) : item.coordinates);
 
-  useEffect(() => {
-    if (!mapRef.current || !window.google?.maps || !mapsApiKey) return;
+  // In geo mode the SVG stretches with the map; this keeps badges and pins at a constant screen size.
+  const counterScale = geoMode ? ` scale(${1 / scale.x} ${1 / scale.y})` : '';
 
-    const darkStyles = [
-      { elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-      { elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
-      { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1120' }] },
-      { featureType: 'road', stylers: [{ color: '#1e293b' }, { visibility: 'simplified' }] },
-      { featureType: 'water', stylers: [{ color: '#0f766e' }, { opacity: 0.4 }] },
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] }
-    ];
+  // Ignore the click that ends a map drag.
+  const isDragRelease = (e) => {
+    const start = pointerDownRef.current;
+    return Boolean(start) && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5;
+  };
 
-    const lightStyles = [
-      { featureType: 'water', stylers: [{ color: '#dbeafe' }] },
-      { featureType: 'road', stylers: [{ color: '#f8fafc' }, { visibility: 'simplified' }] },
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-      { elementType: 'labels.text.fill', stylers: [{ color: '#0f172a' }] },
-      { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] }
-    ];
+  const handleCanvasMouseMove = (e) => {
+    if (!hoveredTract && !hoveredCenter) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoverPos({ x: e.clientX - rect.left, y: e.clientY - rect.top, width: rect.width });
+  };
 
-    const selectedStyles = basemapStyle === 'dark' ? darkStyles : basemapStyle === 'radar' ? darkStyles : lightStyles;
-
-    let map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 41.8781, lng: -87.6298 },
-      zoom: 10,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-      disableDefaultUI: true,
-      styles: selectedStyles,
-      gestureHandling: 'greedy'
-    });
-
-    const tractLocations = (tracts || [])
-      .filter((tract) => Number.isFinite(tract.lat) && Number.isFinite(tract.lng))
-      .slice(0, 12);
-
-    tractLocations.forEach((tract) => {
-      const color = tract.heatOffset >= 8.5 ? '#ef4444' : tract.heatOffset >= 6 ? '#f97316' : '#fbbf24';
-      const marker = new window.google.maps.Marker({
-        position: { lat: tract.lat, lng: tract.lng },
-        map,
-        title: tract.name,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 7,
-          fillColor: color,
-          fillOpacity: 0.95,
-          strokeColor: '#f8fafc',
-          strokeWeight: 2
-        }
-      });
-
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `<div style="color:#0f172a;font-family:monospace;font-size:12px;padding:4px 8px"><strong>${tract.name}</strong><br/>Risk ${tract.bqmlRiskScore ?? tract.heatOffset?.toFixed(1) ?? 'n/a'} / Heat +${tract.heatOffset?.toFixed(1) ?? '0.0'}°F</div>`
-      });
-
-      marker.addListener('click', () => infoWindow.open({ anchor: marker, map }));
-    });
-
-    return () => {
-      map = null;
-    };
-  }, [mapLoaded, mapsApiKey, tracts, basemapStyle]);
-
-  // Helper to get heat color based on BQML offset + simulation boost
-  const getHeatFillColor = (offset, isHovered, isSelected) => {
-    const effectiveOffset = offset + simulatedHeatBoost;
-    let baseColor = "#eab308"; // default yellow (+4°F)
-    let opacity = isSelected ? "0.92" : isHovered ? "0.85" : "0.72";
-
-    if (effectiveOffset >= 9.5) {
-      baseColor = "#991b1b"; // Deep dark red / crimson
-    } else if (effectiveOffset >= 8.5) {
-      baseColor = "#dc2626"; // Vibrant red
-    } else if (effectiveOffset >= 7.5) {
-      baseColor = "#ea580c"; // Red-orange
-    } else if (effectiveOffset >= 6.0) {
-      baseColor = "#f97316"; // Orange
-    } else if (effectiveOffset >= 5.0) {
-      baseColor = "#eab308"; // Yellow-amber
-    } else {
-      baseColor = "#84cc16"; // Lime / baseline
-    }
-
-    return { color: baseColor, opacity };
+  const tooltipStyle = {
+    left: `${Math.max(Math.min(hoverPos.x + 16, hoverPos.width - 300), 8)}px`,
+    top: `${Math.max(hoverPos.y + 16, 40)}px`
   };
 
   const handleZoom = (delta) => {
+    if (geoMode) {
+      map.setZoom(map.getZoom() + Math.sign(delta));
+      return;
+    }
     setZoomLevel(prev => Math.min(Math.max(prev + delta, 0.8), 2.2));
   };
 
   const resetView = () => {
+    if (geoMode) {
+      fitToData();
+      return;
+    }
     setZoomLevel(1);
     setPanOffset({ x: 0, y: 0 });
   };
@@ -174,8 +146,13 @@ export default function HeatMap({
         </span>
         <span className="text-slate-500 text-xs">|</span>
         <span className="text-[11px] font-mono text-orange-400">
-          {mapsApiKey ? 'Google Maps + BQML Surface Grid' : 'BQML Satellite Surface Grid'}
+          BQML Satellite Surface Grid
         </span>
+        {mapStatus === 'error' && (
+          <span className="text-[10px] text-amber-400" title="Check VITE_GOOGLE_MAPS_API_KEY and the browser console">
+            (Google Maps unavailable — schematic view)
+          </span>
+        )}
       </div>
 
       {/* Map Zoom Controls */}
@@ -204,21 +181,22 @@ export default function HeatMap({
       </div>
 
       {/* Main Interactive SVG Map Canvas */}
-      <div className="relative flex-1 w-full h-full overflow-hidden cursor-crosshair">
-        {mapsApiKey && (
-          <div
-            ref={mapRef}
-            className="absolute inset-0 opacity-100 pointer-events-none z-10"
-            aria-label="Google Maps background for Chicago"
-          />
-        )}
+      <div
+        className={`relative flex-1 w-full h-full overflow-hidden ${geoMode ? '' : 'cursor-crosshair'}`}
+        onMouseMove={handleCanvasMouseMove}
+        onPointerDownCapture={(e) => { pointerDownRef.current = { x: e.clientX, y: e.clientY }; }}
+      >
+        {/* Google basemap (sits under the schematic SVG until it is ready) */}
+        <div ref={mapDivRef} className="absolute inset-0" />
+
+        {(svg => (geoMode ? createPortal(svg, overlayEl) : svg))(
         <svg
           viewBox="0 0 800 580"
-          className="absolute inset-0 w-full h-full transition-transform duration-300 z-20"
-          style={{
+          preserveAspectRatio={geoMode ? 'none' : undefined}
+          className={geoMode ? 'absolute inset-0 w-full h-full' : 'relative w-full h-full transition-transform duration-300'}
+          style={geoMode ? { overflow: 'visible', pointerEvents: 'none' } : {
             transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-            transformOrigin: 'center center',
-            opacity: 0.9
+            transformOrigin: 'center center'
           }}
         >
           <defs>
@@ -235,12 +213,12 @@ export default function HeatMap({
             </radialGradient>
 
             {/* Vulnerability Striped Pattern */}
-            <pattern id="vulnerableHatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+            <pattern id="vulnerableHatch" width="8" height="8" patternTransform={`${counterScale} rotate(45 0 0)`} patternUnits="userSpaceOnUse">
               <line x1="0" y1="0" x2="0" y2="8" stroke="#a855f7" strokeWidth="2" strokeOpacity="0.45" />
             </pattern>
 
             {/* Tree Canopy Striped Pattern */}
-            <pattern id="canopyDeficitHatch" width="6" height="6" patternTransform="rotate(135 0 0)" patternUnits="userSpaceOnUse">
+            <pattern id="canopyDeficitHatch" width="6" height="6" patternTransform={`${counterScale} rotate(135 0 0)`} patternUnits="userSpaceOnUse">
               <line x1="0" y1="0" x2="0" y2="6" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
             </pattern>
 
@@ -251,13 +229,11 @@ export default function HeatMap({
             </filter>
           </defs>
 
+          {/* Schematic background (replaced by the Google basemap in geo mode) */}
+          {!geoMode && (<>
           {/* Background Map Layer */}
-          <rect
-            width="800"
-            height="580"
-            fill={basemapStyle === 'radar' ? '#060a12' : basemapStyle === 'dark' ? '#0a0e17' : '#f8fafc'}
-          />
-          <rect width="800" height="580" fill={basemapStyle === 'streets' ? 'rgba(148, 163, 184, 0.08)' : 'url(#grid)'} />
+          <rect width="800" height="580" fill={basemapStyle === 'satellite' ? '#060a12' : '#0a0e17'} />
+          <rect width="800" height="580" fill="url(#grid)" />
 
           {/* Chicago River & Green Belt Mockup */}
           <g opacity="0.35">
@@ -295,108 +271,54 @@ export default function HeatMap({
             <path d="M 100 480 Q 20 250 140 100 Q 400 40 700 120 Q 770 350 680 500" strokeWidth="1.5" strokeDasharray="4,4" />
             <text x="140" y="90" fill="#94a3b8" fontSize="9" fontFamily="monospace">Dan Ryan</text>
           </g>
+          </>)}
 
-          {/* Heat Offset Tract Polygons */}
-          <g id="tracts-layer">
-            {tracts.map((tract) => {
-              const effectiveOffset = tract.heatOffset + simulatedHeatBoost;
-              const isFilteredOut = effectiveOffset < heatThreshold;
-              const isSelected = selectedTract?.id === tract.id;
-              const isHovered = hoveredTract?.id === tract.id;
-              const { color, opacity } = getHeatFillColor(tract.heatOffset, isHovered, isSelected);
+          {/* Live tracts on the schematic (in geo mode they are Google map markers, see useTractMarkers) */}
+          {!geoMode && projectToSchematic && scoreRange && (
+            <g id="tracts-layer" pointerEvents="auto">
+              {tracts.map((tract) => {
+                const { x, y } = projectToSchematic(tract);
+                const isSelected = selectedTract?.id === tract.id;
+                const isHovered = hoveredTract?.id === tract.id;
+                const isFlagged = showVulnerableTracts && isVulnerableTract(tract);
 
-              // Vulnerable tract criteria (no-vehicle > 30% OR seniorRate > 25%)
-              const isVulnerable = tract.demographics.noVehicleRate > 30 || tract.demographics.seniorRate > 25;
-              const isCanopyDeficit = tract.demographics.treeCanopyCover < 10;
-
-              return (
-                <g 
-                  key={tract.id}
-                  className="cursor-pointer transition-all duration-200"
-                  onClick={() => onSelectTract(tract)}
-                  onMouseEnter={() => setHoveredTract(tract)}
-                  onMouseLeave={() => setHoveredTract(null)}
-                >
-                  {/* Base Tract Polygon */}
-                  <path
-                    d={tract.shape}
-                    fill={color}
-                    fillOpacity={isFilteredOut ? 0.15 : opacity}
-                    stroke={isSelected ? "#ffffff" : isHovered ? "#f97316" : "#334155"}
-                    strokeWidth={isSelected ? 3.5 : isHovered ? 2.5 : 1}
-                    className="transition-all duration-200"
-                    filter={isSelected ? "url(#glow)" : undefined}
-                  />
-
-                  {/* Vulnerable Tract Overlay Pattern */}
-                  {showVulnerableTracts && isVulnerable && !isFilteredOut && (
-                    <path
-                      d={tract.shape}
-                      fill="url(#vulnerableHatch)"
-                      stroke="#c084fc"
-                      strokeWidth="2"
-                      strokeDasharray="4,3"
-                      pointerEvents="none"
+                return (
+                  <g
+                    key={tract.id}
+                    className="cursor-pointer"
+                    onClick={(e) => { if (!isDragRelease(e)) onSelectTract(tract); }}
+                    onMouseEnter={() => setHoveredTract(tract)}
+                    onMouseLeave={() => setHoveredTract(null)}
+                  >
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={isSelected ? 7 : isHovered ? 6 : 4}
+                      fill={scoreColor(tract.socialVulnerability, scoreRange)}
+                      fillOpacity="0.92"
+                      stroke={isSelected ? '#ffffff' : isFlagged ? '#c084fc' : '#0f172a'}
+                      strokeWidth={isSelected ? 2.5 : isFlagged ? 1.5 : 0.75}
                     />
-                  )}
-
-                  {/* Canopy Deficit Overlay Pattern */}
-                  {showCanopyDeficit && isCanopyDeficit && !isFilteredOut && (
-                    <path
-                      d={tract.shape}
-                      fill="url(#canopyDeficitHatch)"
-                      pointerEvents="none"
-                    />
-                  )}
-
-                  {/* Heat Offset Badge in Tract Center */}
-                  <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})`} pointerEvents="none">
-                    <rect
-                      x="-28"
-                      y="-12"
-                      width="56"
-                      height="24"
-                      rx="6"
-                      fill="#0f172a"
-                      fillOpacity="0.88"
-                      stroke={isSelected ? "#f97316" : "#475569"}
-                      strokeWidth={isSelected ? "1.5" : "1"}
-                    />
-                    <text
-                      x="0"
-                      y="4"
-                      textAnchor="middle"
-                      fill={effectiveOffset >= 8.5 ? "#f87171" : "#fbbf24"}
-                      fontSize="11"
-                      fontWeight="700"
-                      fontFamily="monospace"
-                    >
-                      +{effectiveOffset.toFixed(1)}°F
-                    </text>
+                    {isSelected && (
+                      <circle cx={x} cy={y} r="16" fill="none" stroke="#f97316" strokeWidth="2" className="animate-ping" opacity="0.6" pointerEvents="none" />
+                    )}
                   </g>
-
-                  {/* Selected Indicator Pulse Beacon */}
-                  {isSelected && (
-                    <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})`}>
-                      <circle r="36" fill="none" stroke="#f97316" strokeWidth="2" className="animate-ping" opacity="0.6" />
-                      <circle r="42" fill="none" stroke="#ea580c" strokeWidth="1" strokeDasharray="3,3" />
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* Historical Hotspot Markers (911 Heat Emergency Dispatches) */}
           {showHistoricalHotspots && (
-            <g id="historical-hotspots-layer">
+            <g id="historical-hotspots-layer" pointerEvents="auto">
               {HISTORICAL_HOTSPOTS.map((hotspot) => (
-                <g 
-                  key={hotspot.id} 
-                  transform={`translate(${hotspot.coordinates.x}, ${hotspot.coordinates.y})`}
+                <g
+                  key={hotspot.id}
+                  transform={`translate(${pinPosition(hotspot).x}, ${pinPosition(hotspot).y})${counterScale}`}
                   className="cursor-pointer group"
-                  onClick={() => {
-                    const targetTract = tracts.find(t => t.id === hotspot.tractId);
+                  onClick={(e) => {
+                    if (isDragRelease(e)) return;
+                    const targetTract = tracts?.find(t => t.id === hotspot.tractId);
                     if (targetTract) onSelectTract(targetTract);
                   }}
                 >
@@ -427,20 +349,21 @@ export default function HeatMap({
 
           {/* Cooling Centers Pins */}
           {showCoolingCenters && (
-            <g id="cooling-centers-layer">
+            <g id="cooling-centers-layer" pointerEvents="auto">
               {COOLING_CENTERS.map((center) => {
                 const isHovered = hoveredCenter?.id === center.id;
                 const isNearCapacity = center.occupancyPct >= 85;
 
                 return (
-                  <g 
+                  <g
                     key={center.id}
-                    transform={`translate(${center.coordinates.x}, ${center.coordinates.y})`}
+                    transform={`translate(${pinPosition(center).x}, ${pinPosition(center).y})${counterScale}`}
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredCenter(center)}
                     onMouseLeave={() => setHoveredCenter(null)}
-                    onClick={() => {
-                      const targetTract = tracts.find(t => t.id === center.tractId);
+                    onClick={(e) => {
+                      if (isDragRelease(e)) return;
+                      const targetTract = tracts?.find(t => t.id === center.tractId);
                       if (targetTract) onSelectTract(targetTract);
                     }}
                   >
@@ -495,27 +418,26 @@ export default function HeatMap({
             </g>
           )}
         </svg>
+        )}
 
         {/* Hover Tooltip for Tract or Center */}
         {hoveredTract && !selectedTract && (
           <div 
             className="absolute z-30 pointer-events-none bg-slate-900/95 border border-slate-700 p-2.5 rounded-xl shadow-2xl text-xs backdrop-blur-md max-w-xs transition-opacity"
-            style={{
-              left: `${Math.min(Math.max(hoveredTract.coordinates.x * 0.9, 20), 480)}px`,
-              top: `${Math.min(Math.max(hoveredTract.coordinates.y * 0.8, 40), 400)}px`
-            }}
+            style={tooltipStyle}
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1">
               <span className="font-bold text-slate-100">{hoveredTract.name}</span>
-              <span className="font-mono font-bold text-orange-400">
-                +{(hoveredTract.heatOffset + simulatedHeatBoost).toFixed(1)}°F
+              <span className="font-mono font-bold" style={{ color: scoreRange ? scoreColor(hoveredTract.socialVulnerability, scoreRange) : undefined }}>
+                SVI {hoveredTract.socialVulnerability.toFixed(2)}
               </span>
             </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">{hoveredTract.area}</div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1 text-[11px] text-slate-300">
-              <div>Surface Temp: <span className="font-semibold text-rose-300">{hoveredTract.surfaceTemp}°F</span></div>
-              <div>No Vehicle: <span className="font-semibold text-purple-300">{hoveredTract.demographics.noVehicleRate}%</span></div>
-              <div>Seniors &gt;65: <span className="font-semibold text-amber-300">{hoveredTract.demographics.seniorRate}%</span></div>
-              <div>Canopy Cover: <span className="font-semibold text-emerald-300">{hoveredTract.demographics.treeCanopyCover}%</span></div>
+              <div>Avg Temp: <span className="font-semibold text-rose-300">{fmtTemp(hoveredTract.surfaceTemp)}</span></div>
+              <div>No Vehicle: <span className="font-semibold text-purple-300">{fmtPct(hoveredTract.demographics.noVehicleRate)}</span></div>
+              <div>Seniors &gt;65: <span className="font-semibold text-amber-300">{fmtPct(hoveredTract.demographics.seniorRate)}</span></div>
+              <div>Poverty: <span className="font-semibold text-slate-100">{fmtPct(hoveredTract.demographics.povertyRate)}</span></div>
             </div>
             <div className="mt-1.5 text-[10px] text-slate-400 italic">
               Click to feed telemetry directly into AI Planner &rarr;
@@ -527,10 +449,7 @@ export default function HeatMap({
         {hoveredCenter && (
           <div 
             className="absolute z-30 pointer-events-none bg-slate-900/95 border border-cyan-500/40 p-2.5 rounded-xl shadow-2xl text-xs backdrop-blur-md max-w-xs"
-            style={{
-              left: `${hoveredCenter.coordinates.x * 0.85}px`,
-              top: `${hoveredCenter.coordinates.y * 0.8}px`
-            }}
+            style={tooltipStyle}
           >
             <div className="flex items-center gap-1.5 font-bold text-cyan-300 border-b border-slate-800 pb-1">
               <Building2 className="w-3.5 h-3.5 text-cyan-400" />
@@ -557,23 +476,23 @@ export default function HeatMap({
                     {selectedTract.name}
                   </span>
                   <span className="text-xs font-mono px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                    BQML Offset: +{(selectedTract.heatOffset + simulatedHeatBoost).toFixed(1)}°F
+                    Social Vulnerability: {selectedTract.socialVulnerability.toFixed(2)}
                   </span>
                   <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                    Tract {selectedTract.tractNumber}
+                    GEOID {selectedTract.tractNumber}
                   </span>
                 </div>
-                
+
                 <p className="text-xs text-slate-300 line-clamp-1">
-                  {selectedTract.notes}
+                  {selectedTract.area} · {selectedTract.demographics.population.toLocaleString()} residents
                 </p>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 pt-0.5 font-mono">
-                  <span>Surface: <b className="text-rose-400">{selectedTract.surfaceTemp}°F</b></span>
-                  <span>Zero-Car: <b className="text-purple-300">{selectedTract.demographics.noVehicleRate}%</b></span>
-                  <span>Age &gt;65: <b className="text-amber-300">{selectedTract.demographics.seniorRate}%</b></span>
-                  <span>Canopy: <b className="text-emerald-300">{selectedTract.demographics.treeCanopyCover}%</b></span>
-                  <span>Cooling Center: <b className="text-cyan-300">{selectedTract.nearestCenterDist}</b></span>
+                  <span>Avg Temp: <b className="text-rose-400">{fmtTemp(selectedTract.surfaceTemp)}</b></span>
+                  <span>vs City: <b className="text-orange-300">{fmtOffset(selectedTract.heatOffset)}</b></span>
+                  <span>Zero-Car: <b className="text-purple-300">{fmtPct(selectedTract.demographics.noVehicleRate)}</b></span>
+                  <span>Age &gt;65: <b className="text-amber-300">{fmtPct(selectedTract.demographics.seniorRate)}</b></span>
+                  <span>Poverty: <b className="text-slate-100">{fmtPct(selectedTract.demographics.povertyRate)}</b></span>
                 </div>
               </div>
 
@@ -612,21 +531,25 @@ export default function HeatMap({
       {/* Bottom Map Legend Bar */}
       <div className="bg-slate-900/90 border-t border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
         
-        {/* Heat Offset Gradient Scale */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400 font-mono">BQML Heat Offset:</span>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400">+4°F</span>
-            <div className="flex h-2.5 w-32 rounded-full overflow-hidden border border-slate-700">
-              <div className="flex-1 bg-[#84cc16]"></div>
-              <div className="flex-1 bg-[#eab308]"></div>
-              <div className="flex-1 bg-[#f97316]"></div>
-              <div className="flex-1 bg-[#dc2626]"></div>
-              <div className="flex-1 bg-[#991b1b]"></div>
+        {/* Social Vulnerability Gradient Scale (colours both the surface and the tract dots) */}
+        {scoreRange ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 font-mono">Social Vulnerability:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400">{scoreRange.min.toFixed(2)} able to escape</span>
+              <div className="h-2.5 w-32 rounded-full border border-slate-700" style={{ background: RPL_GRADIENT_CSS }}></div>
+              <span className="text-[10px] text-slate-400">{scoreRange.max.toFixed(2)} most attention</span>
+              <span className="text-[10px] text-slate-500">· {tracts.length.toLocaleString()} tracts</span>
+              {tractSource === 'sample' && (
+                <span className="text-[10px] text-amber-400" title="The tract API could not be reached; showing the bundled sample">
+                  (sample data)
+                </span>
+              )}
             </div>
-            <span className="text-[10px] text-slate-400">+10°F+</span>
           </div>
-        </div>
+        ) : (
+          <span className="text-[11px] text-slate-500 font-mono">Loading tracts…</span>
+        )}
 
         {/* Legend Symbols */}
         <div className="flex items-center gap-3 text-[11px] text-slate-400">

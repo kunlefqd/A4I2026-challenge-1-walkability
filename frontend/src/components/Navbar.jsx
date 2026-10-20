@@ -53,7 +53,7 @@ export default function Navbar({
                   Agent Active
                 </span>
                 <span className="text-xs text-slate-400 hidden lg:inline font-mono">
-                  BQML Spatial Engine v3.8
+                  Gemini 2.5 Flash
                 </span>
               </div>
             </div>

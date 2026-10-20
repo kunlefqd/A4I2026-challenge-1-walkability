@@ -10,21 +10,29 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-export default function MetricsRibbon({ 
-  currentCity, 
-  alertCount, 
-  simulatedHeatBoost, 
+export default function MetricsRibbon({
+  currentCity,
+  liveMetrics = {},
+  alertCount,
+  simulatedHeatBoost,
   setSimulatedHeatBoost,
   weather,
   liveRiskRows = [],
   onOpenAlerts
 }) {
+  // Current conditions from services/weather; the city presets if the weather fetch failed.
   const currentTemp = weather?.tempF ?? currentCity.ambientTemp;
   const feelsLike = weather?.feelsLikeF ?? currentCity.heatIndex;
   const effectiveTemp = currentTemp + simulatedHeatBoost;
   const effectiveIndex = feelsLike + simulatedHeatBoost;
   const topRisk = liveRiskRows[0];
   const liveRiskLabel = topRisk ? `Priority ${Number(topRisk.combined_priority_score).toFixed(2)} / hazard ${Number(topRisk.normalized_heat_hazard).toFixed(2)}` : 'Local fallback';
+
+  // Heat Watch peak time and population at risk from live data (lib/liveMetrics); the city presets otherwise.
+  const hasLiveHeat = liveMetrics.temp != null;
+  const hasLivePop = liveMetrics.populationAtRisk != null;
+  const peakTime = hasLiveHeat ? (liveMetrics.peakTime ?? 'n/a') : currentCity.peakHour;
+  const populationAtRisk = hasLivePop ? liveMetrics.populationAtRisk : currentCity.populationAtRisk;
 
   return (
     <div className="bg-slate-900/70 border-b border-slate-800/80 px-4 lg:px-6 py-2">
@@ -34,7 +42,10 @@ export default function MetricsRibbon({
         <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2">
           
           {/* Temperature & Heat Index */}
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            title={weather ? `Current Chicago conditions from ${weather.provider}` : undefined}
+          >
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-400">
               <Thermometer className="w-4 h-4" />
             </div>
@@ -62,21 +73,26 @@ export default function MetricsRibbon({
               <Clock className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-semibold text-slate-200">{currentCity.peakHour}</p>
-              <p className="text-[10px] text-slate-400">Peak Thermal Anomaly</p>
+              <p className="font-semibold text-slate-200">{peakTime}</p>
+              <p className="text-[10px] text-slate-400">{hasLiveHeat ? 'Hottest Observation' : 'Peak Thermal Anomaly'}</p>
             </div>
           </div>
 
           {/* Population at Risk */}
-          <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
+          <div
+            className="flex items-center gap-2 border-l border-slate-800 pl-4"
+            title={hasLivePop ? `Residents of the ${liveMetrics.atRiskTractCount} most socially vulnerable tracts (top 20% of ${liveMetrics.tractCount})` : undefined}
+          >
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-rose-500/15 text-rose-400">
               <Users className="w-4 h-4" />
             </div>
             <div>
               <p className="font-semibold text-slate-100 font-mono">
-                {currentCity.populationAtRisk.toLocaleString()}
+                {populationAtRisk.toLocaleString()}
               </p>
-              <p className="text-[10px] text-slate-400">High-Vulnerability Pop</p>
+              <p className="text-[10px] text-slate-400">
+                {hasLivePop ? `High-Vulnerability Pop · ${liveMetrics.atRiskTractCount} tracts` : 'High-Vulnerability Pop'}
+              </p>
             </div>
           </div>
 

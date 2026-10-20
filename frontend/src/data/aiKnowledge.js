@@ -1,4 +1,6 @@
 // AI Planning responses, structured card templates, and intelligent query parser
+import { fmtOffset, fmtPct, fmtTemp } from '../lib/tractAdapter';
+
 export const INITIAL_CHAT_MESSAGES = [
   {
     id: "msg-1",
@@ -246,6 +248,24 @@ The table below audits our current top 4 candidate intervention sites:`,
     };
   }
 
+  // 5. Node click inspection response (live tract_heat_risk tract; see lib/tractAdapter)
+  if (contextTract) {
+    const d = contextTract.demographics;
+    return {
+      content: `### 📍 Spatial Node Telemetry: ${contextTract.name} (GEOID ${contextTract.tractNumber})
+
+- **Location:** ${contextTract.area} · ${d.population.toLocaleString()} residents
+- **Social Vulnerability Score:** **${contextTract.socialVulnerability.toFixed(2)}** (risk ${contextTract.bqmlRiskScore} / 10)
+- **Average Afternoon Temperature:** **${fmtTemp(contextTract.surfaceTemp)}** (${fmtOffset(contextTract.heatOffset)} vs city average${contextTract.observationCount ? `, ${contextTract.observationCount.toLocaleString()} observations` : ''})
+- **Demographics:** Zero-Vehicle: **${fmtPct(d.noVehicleRate)}** | Senior Pop (>65): **${fmtPct(d.seniorRate)}** | Poverty: **${fmtPct(d.povertyRate)}**${d.medianAge != null ? ` | Median Age: **${d.medianAge}**` : ''}
+
+Ask me to compare this tract with its neighbours, or push it to the Kanban board as a candidate site.`,
+      structuredType: "tract_card",
+      tract: contextTract
+    };
+  }
+
+  // Default intelligent assistant response
   return {
     content: `### 🧠 Chicago Urban Heat Planning Response
 

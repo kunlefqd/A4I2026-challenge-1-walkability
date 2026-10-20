@@ -15,10 +15,7 @@ service-account*.json
 credentials.json
 .env
 .env.local
-
-# Node / Vite
-node_modules/
-.vite/
+.env.*.local
 
 # OS
 .DS_Store
@@ -33,4 +30,5 @@ node_modules/
 dist/
 .vite/
 *.log
+*.tsbuildinfo
 

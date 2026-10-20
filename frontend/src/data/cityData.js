@@ -17,6 +17,30 @@ export const CITIES = [
   }
 ];
 
+// Georeference for the 800x580 SVG map space. In geo mode the SVG overlay is stretched over
+// CHICAGO_GEO_BOUNDS (see useGoogleMapOverlay), so pins placed with pin(lat, lng) land on the
+// right spot of the real basemap.
+export const MAP_VIEWBOX = { width: 800, height: 580 };
+export const CHICAGO_GEO_BOUNDS = {
+  north: 42.0230,
+  south: 41.6445,
+  west: -87.9401,
+  east: -87.5240,
+};
+
+export const svgToLatLng = ({ x, y }, bounds = CHICAGO_GEO_BOUNDS) => ({
+  lat: bounds.north - (y / MAP_VIEWBOX.height) * (bounds.north - bounds.south),
+  lng: bounds.west + (x / MAP_VIEWBOX.width) * (bounds.east - bounds.west),
+});
+
+export const latLngToSvg = ({ lat, lng }, bounds = CHICAGO_GEO_BOUNDS) => ({
+  x: ((lng - bounds.west) / (bounds.east - bounds.west)) * MAP_VIEWBOX.width,
+  y: ((bounds.north - lat) / (bounds.north - bounds.south)) * MAP_VIEWBOX.height,
+});
+
+// Real location plus its SVG coordinates, for cooling centers and hotspots.
+const pin = (lat, lng) => ({ lat, lng, coordinates: latLngToSvg({ lat, lng }) });
+
 // Tracts for Chicago - Summer Campaign
 export const CHICAGO_TRACTS = [
   {
@@ -240,7 +264,7 @@ export const COOLING_CENTERS = [
     waterBottlesRemaining: 1840,
     medicalStaff: "2 RNs On Site",
     hours: "8:00 AM - 9:00 PM (Extended Heat Hours)",
-    coordinates: { x: 255, y: 265 }
+    ...pin(41.8645, -87.7108)
   },
   {
     id: "cc-2",
@@ -255,7 +279,7 @@ export const COOLING_CENTERS = [
     waterBottlesRemaining: 2900,
     medicalStaff: "1 Paramedic On Site",
     hours: "9:00 AM - 10:00 PM",
-    coordinates: { x: 588, y: 350 }
+    ...pin(41.7516, -87.5636)
   },
   {
     id: "cc-3",
@@ -270,7 +294,7 @@ export const COOLING_CENTERS = [
     waterBottlesRemaining: 740,
     medicalStaff: "On-Call EMS",
     hours: "10:00 AM - 8:00 PM",
-    coordinates: { x: 345, y: 405 }
+    ...pin(41.7762, -87.6443)
   },
   {
     id: "cc-4",
@@ -285,7 +309,7 @@ export const COOLING_CENTERS = [
     waterBottlesRemaining: 1880,
     medicalStaff: "First Aid Station",
     hours: "8:00 AM - 9:00 PM",
-    coordinates: { x: 384, y: 235 }
+    ...pin(41.8578, -87.6717)
   },
   {
     id: "cc-5",
@@ -300,7 +324,7 @@ export const COOLING_CENTERS = [
     waterBottlesRemaining: 2300,
     medicalStaff: "First Aid Qualified",
     hours: "9:00 AM - 7:00 PM",
-    coordinates: { x: 598, y: 132 }
+    ...pin(42.0080, -87.6741)
   }
 ];
 
@@ -312,7 +336,7 @@ export const HISTORICAL_HOTSPOTS = [
     heatDispatches2025: 58,
     peakRecordedSurface: "139.1°F",
     primaryHazard: "Unshaded bus stop and wide concrete transit frontage with high pedestrian exposure",
-    coordinates: { x: 360, y: 420 }
+    ...pin(41.7796, -87.6446)
   },
   {
     id: "hh-2",
@@ -321,7 +345,7 @@ export const HISTORICAL_HOTSPOTS = [
     heatDispatches2025: 51,
     peakRecordedSurface: "136.4°F",
     primaryHazard: "Dense commercial strip with low tree cover and reflective storefront surfaces",
-    coordinates: { x: 255, y: 270 }
+    ...pin(41.8520, -87.7248)
   },
   {
     id: "hh-3",
@@ -330,7 +354,7 @@ export const HISTORICAL_HOTSPOTS = [
     heatDispatches2025: 44,
     peakRecordedSurface: "132.2°F",
     primaryHazard: "Large parking lots and unshaded waiting areas near bus transfer points",
-    coordinates: { x: 575, y: 335 }
+    ...pin(41.7515, -87.5856)
   },
   {
     id: "hh-4",
@@ -339,6 +363,6 @@ export const HISTORICAL_HOTSPOTS = [
     heatDispatches2025: 36,
     peakRecordedSurface: "129.8°F",
     primaryHazard: "Heat stored in pavement and metal-clad industrial frontage",
-    coordinates: { x: 180, y: 195 }
+    ...pin(41.8806, -87.7454)
   }
 ];
