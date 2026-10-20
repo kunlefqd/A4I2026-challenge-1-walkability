@@ -111,7 +111,7 @@ export default function AlertsTab({
                 <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto opacity-80" />
                 <h4 className="text-sm font-semibold text-slate-200">No Active High-Risk Alerts</h4>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  All active thermal anomaly alerts have been addressed or dismissed. Continuous BQML spatial monitoring active.
+                  Alerts list the most socially vulnerable tracts. They appear once tract data loads; dismissed alerts stay cleared until the page reloads.
                 </p>
               </div>
             ) : (
@@ -152,7 +152,7 @@ export default function AlertsTab({
                       <ChevronRight className="w-3 h-3" />
                     </button>
                     <span className="font-mono text-xs px-2 py-0.5 rounded bg-red-950/70 text-red-300 border border-red-800">
-                      Offset: {alert.bqmlOffset}
+                      SVI: {alert.score.toFixed(2)}
                     </span>
                   </div>
 
@@ -163,16 +163,16 @@ export default function AlertsTab({
 
                   {/* Key Metrics Bar */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/70 p-2 rounded-lg text-[10px] font-mono text-slate-300 border border-slate-800/80">
-                    <div>Heat Offset: <b className="text-orange-400">{alert.metrics.heatOffset}</b></div>
-                    <div>Surface: <b className="text-rose-400">{alert.metrics.surfaceTemp}</b></div>
-                    <div>Zero-Car: <b className="text-purple-300">{alert.metrics.noVehicleRate || alert.metrics.occupancy}</b></div>
-                    <div>Affected: <b className="text-slate-100">{alert.affectedPop.toLocaleString()}</b></div>
+                    <div>Poverty: <b className="text-orange-400">{alert.metrics.povertyRate}</b></div>
+                    <div>Zero-Car: <b className="text-purple-300">{alert.metrics.noVehicleRate}</b></div>
+                    <div>Age 65+: <b className="text-amber-300">{alert.metrics.seniorRate}</b></div>
+                    <div>Residents: <b className="text-slate-100">{alert.affectedPop.toLocaleString()}</b></div>
                   </div>
 
                   {/* Suggested Action Note */}
                   <div className="flex items-center gap-1.5 text-[11px] text-amber-200 bg-amber-950/30 border border-amber-500/30 p-2 rounded-lg">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                    <span><b>AI Plan:</b> {alert.suggestedAction}</span>
+                    <span><b>Suggested:</b> {alert.suggestedAction}</span>
                   </div>
 
                   {/* Operational Action Buttons */}
