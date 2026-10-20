@@ -44,6 +44,22 @@ export const CITIES = [
   }
 ];
 
+// Georeference for the 800x580 schematic map space below. The corners were fit
+// (least squares) against the real locations of the named neighborhoods, so
+// tract shapes land roughly over the right part of Dallas on a real basemap.
+export const MAP_VIEWBOX = { width: 800, height: 580 };
+export const DALLAS_GEO_BOUNDS = {
+  north: 32.9407,
+  south: 32.6041,
+  west: -97.0150,
+  east: -96.5934,
+};
+
+export const svgToLatLng = ({ x, y }, bounds = DALLAS_GEO_BOUNDS) => ({
+  lat: bounds.north - (y / MAP_VIEWBOX.height) * (bounds.north - bounds.south),
+  lng: bounds.west + (x / MAP_VIEWBOX.width) * (bounds.east - bounds.west),
+});
+
 // Tracts for Dallas
 export const DALLAS_TRACTS = [
   {

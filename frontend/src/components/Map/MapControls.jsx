@@ -3,7 +3,8 @@ import {
   Building2, 
   Users, 
   Flame, 
-  TreePine, 
+  TreePine,
+  Thermometer,
   Sliders, 
   Layers, 
   Eye, 
@@ -20,6 +21,8 @@ export default function MapControls({
   setShowHistoricalHotspots,
   showCanopyDeficit,
   setShowCanopyDeficit,
+  showVulnerabilitySurface,
+  setShowVulnerabilitySurface,
   heatThreshold,
   setHeatThreshold,
   basemapStyle,
@@ -42,14 +45,14 @@ export default function MapControls({
             className="bg-slate-800 border border-slate-700 text-slate-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none"
           >
             <option value="dark">Civic Dark</option>
-            <option value="radar">Thermal Radar</option>
-            <option value="streets">Grid Lines</option>
+            <option value="satellite">Satellite</option>
+            <option value="streets">Streets</option>
           </select>
         </div>
       </div>
 
       {/* Overlay Toggles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1">
         
         {/* Toggle: Cooling Centers */}
         <button
@@ -101,6 +104,20 @@ export default function MapControls({
         >
           <TreePine className={`w-3.5 h-3.5 ${showCanopyDeficit ? 'text-emerald-400' : 'text-slate-500'}`} />
           <span className="truncate">Canopy Deficit</span>
+        </button>
+
+        {/* Toggle: Social Vulnerability Surface (RPL_THEMES) */}
+        <button
+          onClick={() => setShowVulnerabilitySurface(!showVulnerabilitySurface)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-left border ${
+            showVulnerabilitySurface
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm shadow-amber-950/40'
+              : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+          title="Smooth green-to-red surface of CDC SVI RPL_THEMES (needs the Google basemap)"
+        >
+          <Thermometer className={`w-3.5 h-3.5 ${showVulnerabilitySurface ? 'text-amber-400' : 'text-slate-500'}`} />
+          <span className="truncate">Vulnerability Surface</span>
         </button>
       </div>
 

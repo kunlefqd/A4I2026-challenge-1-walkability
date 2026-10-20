@@ -7,7 +7,7 @@ import AgentWorkspace from './components/AgentWorkspace/AgentWorkspace';
 import KanbanBoard from './components/Kanban/KanbanBoard';
 import DeployTruckModal from './components/Modals/DeployTruckModal';
 
-import { CITIES, DALLAS_TRACTS } from './data/cityData';
+import { CITIES, DALLAS_TRACTS, svgToLatLng } from './data/cityData';
 import { INITIAL_ALERTS, INITIAL_AUDIT_LOG } from './data/initialAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
@@ -25,6 +25,7 @@ export default function App() {
   const [showVulnerableTracts, setShowVulnerableTracts] = useState(true);
   const [showHistoricalHotspots, setShowHistoricalHotspots] = useState(true);
   const [showCanopyDeficit, setShowCanopyDeficit] = useState(false);
+  const [showVulnerabilitySurface, setShowVulnerabilitySurface] = useState(true);
   const [heatThreshold, setHeatThreshold] = useState(4.0);
   const [basemapStyle, setBasemapStyle] = useState('dark');
   const [simulatedHeatBoost, setSimulatedHeatBoost] = useState(0);
@@ -56,7 +57,8 @@ export default function App() {
     if (!tract) return;
 
     // Build automated telemetry query for the AI Planner Chat
-    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: 32.7481° N, 96.8155° W. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset). What are the top interventions?`;
+    const { lat, lng } = svgToLatLng(tract.coordinates);
+    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: ${lat.toFixed(4)}° N, ${Math.abs(lng).toFixed(4)}° W. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset). What are the top interventions?`;
 
     // Add user question to chat
     const userMsg = {
@@ -217,6 +219,8 @@ export default function App() {
                 setShowHistoricalHotspots={setShowHistoricalHotspots}
                 showCanopyDeficit={showCanopyDeficit}
                 setShowCanopyDeficit={setShowCanopyDeficit}
+                showVulnerabilitySurface={showVulnerabilitySurface}
+                setShowVulnerabilitySurface={setShowVulnerabilitySurface}
                 heatThreshold={heatThreshold}
                 setHeatThreshold={setHeatThreshold}
                 basemapStyle={basemapStyle}
@@ -232,6 +236,7 @@ export default function App() {
                 showVulnerableTracts={showVulnerableTracts}
                 showHistoricalHotspots={showHistoricalHotspots}
                 showCanopyDeficit={showCanopyDeficit}
+                showVulnerabilitySurface={showVulnerabilitySurface}
                 heatThreshold={heatThreshold}
                 basemapStyle={basemapStyle}
                 onDeployTruck={handleDeployTruck}

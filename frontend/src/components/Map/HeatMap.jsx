@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { 
-  DALLAS_TRACTS, 
-  COOLING_CENTERS, 
-  HISTORICAL_HOTSPOTS 
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  DALLAS_TRACTS,
+  COOLING_CENTERS,
+  HISTORICAL_HOTSPOTS
 } from '../../data/cityData';
+import useGoogleMapOverlay from './useGoogleMapOverlay';
+import useVulnerabilitySurface, { RPL_GRADIENT_CSS } from './useVulnerabilitySurface';
 import { 
   Building2, 
   Flame, 
@@ -29,6 +32,7 @@ export default function HeatMap({
   showVulnerableTracts,
   showHistoricalHotspots,
   showCanopyDeficit,
+  showVulnerabilitySurface,
   heatThreshold,
   basemapStyle,
   onDeployTruck,
@@ -39,6 +43,46 @@ export default function HeatMap({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [hoveredTract, setHoveredTract] = useState(null);
   const [hoveredCenter, setHoveredCenter] = useState(null);
+  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0, width: 800 });
+  const mapDivRef = useRef(null);
+  const pointerDownRef = useRef(null);
+
+  // Real Google basemap with the SVG layer georeferenced on top; falls back to
+  // the schematic SVG when no API key is configured or the API fails to load.
+  const { map, overlayEl, scale, status: mapStatus, fitToBounds } = useGoogleMapOverlay(mapDivRef, basemapStyle);
+  const geoMode = Boolean(overlayEl) && mapStatus === 'ready';
+
+  // Smooth RPL_THEMES surface from tractVulnerability.json; needs real coordinates, so geo mode only.
+  const surfaceBounds = useVulnerabilitySurface(map, showVulnerabilitySurface);
+  const surfaceActive = geoMode && showVulnerabilitySurface && Boolean(surfaceBounds);
+
+  // Frame the surface when it is switched on, and return to the tract grid when it is switched off.
+  useEffect(() => {
+    if (!geoMode) return;
+    if (surfaceActive) map.fitBounds(surfaceBounds, 40);
+    else fitToBounds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoMode, surfaceActive]);
+
+  // In geo mode the SVG stretches with the map; this keeps badges and pins at a constant screen size.
+  const counterScale = geoMode ? ` scale(${1 / scale.x} ${1 / scale.y})` : '';
+
+  // Ignore the click that ends a map drag.
+  const isDragRelease = (e) => {
+    const start = pointerDownRef.current;
+    return Boolean(start) && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5;
+  };
+
+  const handleCanvasMouseMove = (e) => {
+    if (!hoveredTract && !hoveredCenter) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoverPos({ x: e.clientX - rect.left, y: e.clientY - rect.top, width: rect.width });
+  };
+
+  const tooltipStyle = {
+    left: `${Math.max(Math.min(hoverPos.x + 16, hoverPos.width - 300), 8)}px`,
+    top: `${Math.max(hoverPos.y + 16, 40)}px`
+  };
 
   // Helper to get heat color based on BQML offset + simulation boost
   const getHeatFillColor = (offset, isHovered, isSelected) => {
@@ -64,10 +108,19 @@ export default function HeatMap({
   };
 
   const handleZoom = (delta) => {
+    if (geoMode) {
+      map.setZoom(map.getZoom() + Math.sign(delta));
+      return;
+    }
     setZoomLevel(prev => Math.min(Math.max(prev + delta, 0.8), 2.2));
   };
 
   const resetView = () => {
+    if (geoMode) {
+      if (surfaceActive) map.fitBounds(surfaceBounds, 40);
+      else fitToBounds();
+      return;
+    }
     setZoomLevel(1);
     setPanOffset({ x: 0, y: 0 });
   };
@@ -85,6 +138,11 @@ export default function HeatMap({
         <span className="text-[11px] font-mono text-orange-400">
           BQML Satellite Surface Grid
         </span>
+        {mapStatus === 'error' && (
+          <span className="text-[10px] text-amber-400" title="Check VITE_GOOGLE_MAPS_API_KEY and the browser console">
+            (Google Maps unavailable — schematic view)
+          </span>
+        )}
       </div>
 
       {/* Map Zoom Controls */}
@@ -113,11 +171,20 @@ export default function HeatMap({
       </div>
 
       {/* Main Interactive SVG Map Canvas */}
-      <div className="relative flex-1 w-full h-full overflow-hidden cursor-crosshair">
+      <div
+        className={`relative flex-1 w-full h-full overflow-hidden ${geoMode ? '' : 'cursor-crosshair'}`}
+        onMouseMove={handleCanvasMouseMove}
+        onPointerDownCapture={(e) => { pointerDownRef.current = { x: e.clientX, y: e.clientY }; }}
+      >
+        {/* Google basemap (sits under the schematic SVG until it is ready) */}
+        <div ref={mapDivRef} className="absolute inset-0" />
+
+        {(svg => (geoMode ? createPortal(svg, overlayEl) : svg))(
         <svg
           viewBox="0 0 800 580"
-          className="w-full h-full transition-transform duration-300"
-          style={{
+          preserveAspectRatio={geoMode ? 'none' : undefined}
+          className={geoMode ? 'absolute inset-0 w-full h-full' : 'relative w-full h-full transition-transform duration-300'}
+          style={geoMode ? { overflow: 'visible', pointerEvents: 'none' } : {
             transform: `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`,
             transformOrigin: 'center center'
           }}
@@ -136,12 +203,12 @@ export default function HeatMap({
             </radialGradient>
 
             {/* Vulnerability Striped Pattern */}
-            <pattern id="vulnerableHatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+            <pattern id="vulnerableHatch" width="8" height="8" patternTransform={`${counterScale} rotate(45 0 0)`} patternUnits="userSpaceOnUse">
               <line x1="0" y1="0" x2="0" y2="8" stroke="#a855f7" strokeWidth="2" strokeOpacity="0.45" />
             </pattern>
 
             {/* Tree Canopy Striped Pattern */}
-            <pattern id="canopyDeficitHatch" width="6" height="6" patternTransform="rotate(135 0 0)" patternUnits="userSpaceOnUse">
+            <pattern id="canopyDeficitHatch" width="6" height="6" patternTransform={`${counterScale} rotate(135 0 0)`} patternUnits="userSpaceOnUse">
               <line x1="0" y1="0" x2="0" y2="6" stroke="#10b981" strokeWidth="1.5" strokeOpacity="0.3" />
             </pattern>
 
@@ -152,8 +219,10 @@ export default function HeatMap({
             </filter>
           </defs>
 
+          {/* Schematic background (replaced by the Google basemap in geo mode) */}
+          {!geoMode && (<>
           {/* Background Map Layer */}
-          <rect width="800" height="580" fill={basemapStyle === 'radar' ? '#060a12' : '#0a0e17'} />
+          <rect width="800" height="580" fill={basemapStyle === 'satellite' ? '#060a12' : '#0a0e17'} />
           <rect width="800" height="580" fill="url(#grid)" />
 
           {/* Trinity River & Green Belt Mockup */}
@@ -192,9 +261,10 @@ export default function HeatMap({
             <path d="M 100 480 Q 20 250 140 100 Q 400 40 700 120 Q 770 350 680 500" strokeWidth="1.5" strokeDasharray="4,4" />
             <text x="140" y="90" fill="#94a3b8" fontSize="9" fontFamily="monospace">Loop 12</text>
           </g>
+          </>)}
 
           {/* Heat Offset Tract Polygons */}
-          <g id="tracts-layer">
+          <g id="tracts-layer" pointerEvents="auto">
             {DALLAS_TRACTS.map((tract) => {
               const effectiveOffset = tract.heatOffset + simulatedHeatBoost;
               const isFilteredOut = effectiveOffset < heatThreshold;
@@ -210,7 +280,7 @@ export default function HeatMap({
                 <g 
                   key={tract.id}
                   className="cursor-pointer transition-all duration-200"
-                  onClick={() => onSelectTract(tract)}
+                  onClick={(e) => { if (!isDragRelease(e)) onSelectTract(tract); }}
                   onMouseEnter={() => setHoveredTract(tract)}
                   onMouseLeave={() => setHoveredTract(null)}
                 >
@@ -221,6 +291,7 @@ export default function HeatMap({
                     fillOpacity={isFilteredOut ? 0.15 : opacity}
                     stroke={isSelected ? "#ffffff" : isHovered ? "#f97316" : "#334155"}
                     strokeWidth={isSelected ? 3.5 : isHovered ? 2.5 : 1}
+                    vectorEffect="non-scaling-stroke"
                     className="transition-all duration-200"
                     filter={isSelected ? "url(#glow)" : undefined}
                   />
@@ -233,6 +304,7 @@ export default function HeatMap({
                       stroke="#c084fc"
                       strokeWidth="2"
                       strokeDasharray="4,3"
+                      vectorEffect="non-scaling-stroke"
                       pointerEvents="none"
                     />
                   )}
@@ -247,7 +319,7 @@ export default function HeatMap({
                   )}
 
                   {/* Heat Offset Badge in Tract Center */}
-                  <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})`} pointerEvents="none">
+                  <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})${counterScale}`} pointerEvents="none">
                     <rect
                       x="-28"
                       y="-12"
@@ -274,7 +346,7 @@ export default function HeatMap({
 
                   {/* Selected Indicator Pulse Beacon */}
                   {isSelected && (
-                    <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})`}>
+                    <g transform={`translate(${tract.coordinates.x}, ${tract.coordinates.y})${counterScale}`} pointerEvents="none">
                       <circle r="36" fill="none" stroke="#f97316" strokeWidth="2" className="animate-ping" opacity="0.6" />
                       <circle r="42" fill="none" stroke="#ea580c" strokeWidth="1" strokeDasharray="3,3" />
                     </g>
@@ -286,13 +358,14 @@ export default function HeatMap({
 
           {/* Historical Hotspot Markers (911 Heat Emergency Dispatches) */}
           {showHistoricalHotspots && (
-            <g id="historical-hotspots-layer">
+            <g id="historical-hotspots-layer" pointerEvents="auto">
               {HISTORICAL_HOTSPOTS.map((hotspot) => (
-                <g 
-                  key={hotspot.id} 
-                  transform={`translate(${hotspot.coordinates.x}, ${hotspot.coordinates.y})`}
+                <g
+                  key={hotspot.id}
+                  transform={`translate(${hotspot.coordinates.x}, ${hotspot.coordinates.y})${counterScale}`}
                   className="cursor-pointer group"
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (isDragRelease(e)) return;
                     const targetTract = DALLAS_TRACTS.find(t => t.id === hotspot.tractId);
                     if (targetTract) onSelectTract(targetTract);
                   }}
@@ -324,19 +397,20 @@ export default function HeatMap({
 
           {/* Cooling Centers Pins */}
           {showCoolingCenters && (
-            <g id="cooling-centers-layer">
+            <g id="cooling-centers-layer" pointerEvents="auto">
               {COOLING_CENTERS.map((center) => {
                 const isHovered = hoveredCenter?.id === center.id;
                 const isNearCapacity = center.occupancyPct >= 85;
 
                 return (
-                  <g 
+                  <g
                     key={center.id}
-                    transform={`translate(${center.coordinates.x}, ${center.coordinates.y})`}
+                    transform={`translate(${center.coordinates.x}, ${center.coordinates.y})${counterScale}`}
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredCenter(center)}
                     onMouseLeave={() => setHoveredCenter(null)}
-                    onClick={() => {
+                    onClick={(e) => {
+                      if (isDragRelease(e)) return;
                       const targetTract = DALLAS_TRACTS.find(t => t.id === center.tractId);
                       if (targetTract) onSelectTract(targetTract);
                     }}
@@ -392,15 +466,13 @@ export default function HeatMap({
             </g>
           )}
         </svg>
+        )}
 
         {/* Hover Tooltip for Tract or Center */}
         {hoveredTract && !selectedTract && (
           <div 
             className="absolute z-30 pointer-events-none bg-slate-900/95 border border-slate-700 p-2.5 rounded-xl shadow-2xl text-xs backdrop-blur-md max-w-xs transition-opacity"
-            style={{
-              left: `${Math.min(Math.max(hoveredTract.coordinates.x * 0.9, 20), 480)}px`,
-              top: `${Math.min(Math.max(hoveredTract.coordinates.y * 0.8, 40), 400)}px`
-            }}
+            style={tooltipStyle}
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1">
               <span className="font-bold text-slate-100">{hoveredTract.name}</span>
@@ -424,10 +496,7 @@ export default function HeatMap({
         {hoveredCenter && (
           <div 
             className="absolute z-30 pointer-events-none bg-slate-900/95 border border-cyan-500/40 p-2.5 rounded-xl shadow-2xl text-xs backdrop-blur-md max-w-xs"
-            style={{
-              left: `${hoveredCenter.coordinates.x * 0.85}px`,
-              top: `${hoveredCenter.coordinates.y * 0.8}px`
-            }}
+            style={tooltipStyle}
           >
             <div className="flex items-center gap-1.5 font-bold text-cyan-300 border-b border-slate-800 pb-1">
               <Building2 className="w-3.5 h-3.5 text-cyan-400" />
@@ -509,8 +578,20 @@ export default function HeatMap({
       {/* Bottom Map Legend Bar */}
       <div className="bg-slate-900/90 border-t border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
         
+        {/* Social Vulnerability Gradient Scale */}
+        {surfaceActive && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 font-mono">Social Vulnerability (RPL_THEMES):</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400">0.0 able to escape</span>
+              <div className="h-2.5 w-32 rounded-full border border-slate-700" style={{ background: RPL_GRADIENT_CSS }}></div>
+              <span className="text-[10px] text-slate-400">1.0 most attention</span>
+            </div>
+          </div>
+        )}
+
         {/* Heat Offset Gradient Scale */}
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${surfaceActive ? 'hidden' : ''}`}>
           <span className="text-[11px] text-slate-400 font-mono">BQML Heat Offset:</span>
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-slate-400">+4°F</span>
