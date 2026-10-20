@@ -71,7 +71,7 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 89,
     projectedTempReduction: "-5.2°F surface temp",
     tags: ["Bioswale", "Cool Median", "Pedestrian"],
-    recommendedBy: "Urban Heat AI - Spatial Priority Rank #4"
+    recommendedBy: "SHADE - Spatial Priority Rank #4"
   },
   {
     id: "kb-04",
@@ -93,7 +93,7 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 94,
     projectedTempReduction: "-7.4°F indoor radiant temp",
     tags: ["Cool Roofs", "High Density Rental", "Energy Equity"],
-    recommendedBy: "Urban Heat AI - Demographic Audit"
+    recommendedBy: "SHADE - Demographic Audit"
   },
   {
     id: "kb-05",
@@ -115,7 +115,7 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 99,
     projectedTempReduction: "-8.6°F shaded zone / -3.8°F tract avg",
     tags: ["Critical Need", "Solar Misting", "Transit Hub", "Zero-Vehicle Tract"],
-    recommendedBy: "Urban Heat AI - Highest Urgency Recommendation"
+    recommendedBy: "SHADE - Highest Urgency Recommendation"
   },
   {
     id: "kb-06",
@@ -137,7 +137,7 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 96,
     projectedTempReduction: "-14°F under canopy surface",
     tags: ["School Route", "Shade Structures", "High Density"],
-    recommendedBy: "Urban Heat AI - Youth Heat Exposure Audit"
+    recommendedBy: "SHADE - Youth Heat Exposure Audit"
   },
   {
     id: "kb-07",
@@ -159,7 +159,7 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 98,
     projectedTempReduction: "-10.5°F roadway surface / -2.4°F ambient",
     tags: ["Cool Pavement", "Funded", "Construction Q3"],
-    recommendedBy: "Urban Heat AI - Council Approved July 2026"
+    recommendedBy: "SHADE - Council Approved July 2026"
   },
   {
     id: "kb-08",
@@ -181,6 +181,6 @@ export const INITIAL_KANBAN_CARDS = [
     equityScore: 88,
     projectedTempReduction: "-12.0°F ambient micro-pocket",
     tags: ["High Pedestrian", "Public Misting", "Operational"],
-    recommendedBy: "Urban Heat AI - Downtown Heat Study"
+    recommendedBy: "SHADE - Downtown Heat Study"
   }
 ];

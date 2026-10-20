@@ -1,4 +1,4 @@
-# Urban Heat Resilience Planner ("Urban Heat AI")
+# SHADE │ Smart Heat Alert & Dispatch Engine
 
 A modern, responsive web application for a municipal climate resilience planning assistant, designed for city managers and emergency responders. Built with React, Tailwind CSS, and Lucide React.
 

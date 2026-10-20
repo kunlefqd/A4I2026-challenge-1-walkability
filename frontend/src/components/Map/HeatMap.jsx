@@ -52,8 +52,8 @@ export default function HeatMap({
   const { map, overlayEl, scale, status: mapStatus, fitToBounds } = useGoogleMapOverlay(mapDivRef, basemapStyle);
   const geoMode = Boolean(overlayEl) && mapStatus === 'ready';
 
-  // Smooth RPL_THEMES surface from tractVulnerability.json; needs real coordinates, so geo mode only.
-  const surfaceBounds = useVulnerabilitySurface(map, showVulnerabilitySurface);
+  // Smooth social_vulnerability_score surface from tractVulnerability.json; needs real coordinates, so geo mode only.
+  const { bounds: surfaceBounds, range: surfaceRange, source: surfaceSource } = useVulnerabilitySurface(map, showVulnerabilitySurface);
   const surfaceActive = geoMode && showVulnerabilitySurface && Boolean(surfaceBounds);
 
   // Frame the surface when it is switched on, and return to the tract grid when it is switched off.
@@ -581,11 +581,16 @@ export default function HeatMap({
         {/* Social Vulnerability Gradient Scale */}
         {surfaceActive && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400 font-mono">Social Vulnerability (RPL_THEMES):</span>
+            <span className="text-[11px] text-slate-400 font-mono">Social Vulnerability:</span>
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400">0.0 able to escape</span>
+              <span className="text-[10px] text-slate-400">{surfaceRange.min.toFixed(2)} able to escape</span>
               <div className="h-2.5 w-32 rounded-full border border-slate-700" style={{ background: RPL_GRADIENT_CSS }}></div>
-              <span className="text-[10px] text-slate-400">1.0 most attention</span>
+              <span className="text-[10px] text-slate-400">{surfaceRange.max.toFixed(2)} most attention</span>
+              {surfaceSource === 'sample' && (
+                <span className="text-[10px] text-amber-400" title="The tract API could not be reached; showing the bundled sample">
+                  (sample data)
+                </span>
+              )}
             </div>
           </div>
         )}

@@ -174,7 +174,7 @@ export default function ChatTab({
               {/* Header meta */}
               <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] text-slate-400 font-mono">
                 <span className={msg.sender === 'user' ? 'text-orange-200 font-bold' : 'text-orange-400 font-bold'}>
-                  {msg.sender === 'user' ? 'City Operations Director' : 'Urban Heat AI (Gemini 3.8)'}
+                  {msg.sender === 'user' ? 'City Operations Director' : 'SHADE (Gemini 3.8)'}
                 </span>
                 <span>{msg.timestamp}</span>
               </div>

@@ -40,8 +40,12 @@ export default function Navbar({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight leading-none">
-                  Urban Heat Resilience Planner
+                <h1 className="flex items-baseline gap-2 text-white leading-none">
+                  <span className="text-base sm:text-lg font-extrabold tracking-[0.2em]">SHADE</span>
+                  <span className="hidden sm:inline text-slate-600" aria-hidden="true">│</span>
+                  <span className="hidden sm:inline text-xs font-medium text-slate-300 tracking-tight">
+                    Smart Heat Alert &amp; Dispatch Engine
+                  </span>
                 </h1>
                 <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 hidden sm:inline-block">
                   AI Copilot

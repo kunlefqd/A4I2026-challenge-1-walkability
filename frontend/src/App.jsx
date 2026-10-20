@@ -149,7 +149,7 @@ export default function App() {
       equityScore: 96,
       projectedTempReduction: "-6.2°F localized relief",
       tags: ["AI Recommendation", "Resilience Hub"],
-      recommendedBy: "Urban Heat AI - Copilot Recommendation"
+      recommendedBy: "SHADE - Copilot Recommendation"
     };
 
     setKanbanCards(prev => [newCard, ...prev]);
@@ -296,7 +296,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/80 px-4 lg:px-6 py-2.5 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span>Municipal Urban Heat AI Platform &copy; 2026</span>
+          <span>SHADE · Smart Heat Alert &amp; Dispatch Engine &copy; 2026</span>
           <span>•</span>
           <span>City of Dallas Office of Resilience & Emergency Operations</span>
         </div>

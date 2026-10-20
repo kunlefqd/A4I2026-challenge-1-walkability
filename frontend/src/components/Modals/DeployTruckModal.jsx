@@ -58,7 +58,7 @@ export default function DeployTruckModal({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Emergency Resource Dispatch</h3>
-              <p className="text-[11px] text-slate-400">Urban Heat Rapid Response Command</p>
+              <p className="text-[11px] text-slate-400">SHADE Rapid Response Command</p>
             </div>
           </div>
           <button 

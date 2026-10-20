@@ -114,7 +114,7 @@ export default function MapControls({
               ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm shadow-amber-950/40'
               : 'bg-slate-800/60 text-slate-400 border-slate-700/60 hover:bg-slate-800 hover:text-slate-200'
           }`}
-          title="Smooth green-to-red surface of CDC SVI RPL_THEMES (needs the Google basemap)"
+          title="Smooth green-to-red surface of social_vulnerability_score (needs the Google basemap)"
         >
           <Thermometer className={`w-3.5 h-3.5 ${showVulnerabilitySurface ? 'text-amber-400' : 'text-slate-500'}`} />
           <span className="truncate">Vulnerability Surface</span>

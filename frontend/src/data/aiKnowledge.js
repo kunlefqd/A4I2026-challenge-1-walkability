@@ -4,7 +4,7 @@ export const INITIAL_CHAT_MESSAGES = [
     id: "msg-1",
     sender: "agent",
     timestamp: "11:00 AM",
-    content: `**Urban Heat AI** operational in **Dallas - Summer Campaign** mode. 
+    content: `**SHADE** operational in **Dallas - Summer Campaign** mode. 
 
 BigQuery ML thermal offset predictions calibrated using Landsat 9 surface thermography, DART transit trip frequency, and 2024 American Community Survey (ACS) 5-year demographic tracts.
 
@@ -259,7 +259,7 @@ ${contextTract.recommendedAction}`,
 
   // Default intelligent assistant response
   return {
-    content: `### 🌐 Urban Heat AI Analysis
+    content: `### 🌐 SHADE Analysis
 
 I have processed your query regarding: **"${query}"** against Dallas municipal spatial layers and BQML climate projections.
 
