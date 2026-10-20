@@ -1,4 +1,5 @@
 Elevator Pitch
+
 Heat waves don't hit cities evenly. One block can bake under a stationary heat dome while the air a few streets over stays bearable. And the people on the hottest blocks are often the least able to escape it: an elderly resident alone in a top-floor apartment with no air conditioning, a family that can't afford to run the AC all night, an outdoor worker with no shade, someone with no home at all.
 
 City-wide heat alerts are too slow and too broad for that. Opening a cooling center doesn't help if the people who need it most are miles away, or if it's full or closed when they arrive.
@@ -10,6 +11,7 @@ When a heat spike starts to form, SHADE flags the highest-risk blocks [24 to 48 
 We can't stop the climate from changing overnight. But with SHADE, no neighbor has to face the heat alone.
 
 Full Pitch
+
 Summers have grown hotter and more erratic for years, but it was the sudden, localized heat spikes that demanded our attention. This was no longer a slow, general warming. Neighborhoods were baking under invisible, stationary heat domes while nearby streets stayed bearable. Nights stopped cooling down, so bodies had no chance to recover before the next day's heat. City-wide heat policies were too slow and too blunt to save lives in real time. We started this work because the margin between discomfort and tragedy had vanished, and the danger had become devastatingly precise.
 
 When the mercury spikes and the grid strains under air-conditioning demand, the cost is paid by the most vulnerable among us. For an elderly resident living alone in a top-floor apartment without air conditioning, a three-day heat wave turns home into a trap. For low-income families, a sudden surge in energy bills forces an agonizing choice between food and air conditioning. For people with chronic illnesses, or on medications that weaken the body's ability to cool itself, a few degrees can mean the difference between a hard day and a hospital visit. For outdoor workers and people waiting at unshaded bus stops, there is no escape from the sun. And for the unhoused, extreme heat is an immediate, life-threatening crisis. In the micro-climates of asphalt, concrete, and systemic neglect, extreme heat isn't an inconvenience. It's a predator.
