@@ -1,5 +1,5 @@
-a4i.Station Daiy Temps:   Has both FIPS and Lat/Long
+a4i.Station Daily Temps: Has both FIPS and Lat/Long
 
-CDC_SVI:     FIPS only
+CDC_SVI: FIPS only
 
-a4i.heat and a4i.station:  Lat/Long Only
+a4i.heat and a4i.station: Lat/Long Only
