@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Navbar from './components/Navbar';
 import MetricsRibbon from './components/MetricsRibbon';
 import HeatMap from './components/Map/HeatMap';
@@ -7,7 +7,10 @@ import AgentWorkspace from './components/AgentWorkspace/AgentWorkspace';
 import KanbanBoard from './components/Kanban/KanbanBoard';
 import DeployTruckModal from './components/Modals/DeployTruckModal';
 
-import { CITIES, DALLAS_TRACTS, svgToLatLng } from './data/cityData';
+import { CITIES } from './data/cityData';
+import { useHeatSummary, useTractData } from './lib/useTractData';
+import { computeLiveMetrics } from './lib/liveMetrics';
+import { fmtOffset, fmtPct, fmtTemp } from './lib/tractAdapter';
 import { INITIAL_ALERTS, INITIAL_AUDIT_LOG } from './data/initialAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
@@ -18,6 +21,11 @@ export default function App() {
   const [currentCity, setCurrentCity] = useState(CITIES[0]); // Dallas - Summer Campaign
   const [currentTrack, setCurrentTrack] = useState('today'); // 'today' | 'budget' | 'decade'
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'kanban'
+
+  // Live data from the tract heat-risk API (bundled sample if it is unreachable)
+  const { tracts: liveTracts, source: tractSource } = useTractData();
+  const heatSummary = useHeatSummary();
+  const liveMetrics = useMemo(() => computeLiveMetrics(liveTracts, heatSummary), [liveTracts, heatSummary]);
 
   // Spatial Map States
   const [selectedTract, setSelectedTract] = useState(null);
@@ -57,8 +65,8 @@ export default function App() {
     if (!tract) return;
 
     // Build automated telemetry query for the AI Planner Chat
-    const { lat, lng } = svgToLatLng(tract.coordinates);
-    const promptText = `Inspecting Tract ${tract.tractNumber} (${tract.name}). Lat/Lng: ${lat.toFixed(4)}° N, ${Math.abs(lng).toFixed(4)}° W. Current surface temp is ${tract.surfaceTemp}°F (+${(tract.heatOffset + simulatedHeatBoost).toFixed(1)}°F offset). What are the top interventions?`;
+    const d = tract.demographics;
+    const promptText = `Inspecting ${tract.name} (GEOID ${tract.tractNumber}, ${tract.area}). Lat/Lng: ${tract.lat.toFixed(4)}° N, ${Math.abs(tract.lng).toFixed(4)}° W. Social vulnerability score ${tract.socialVulnerability.toFixed(2)}; ${d.population.toLocaleString()} residents, poverty ${fmtPct(d.povertyRate)}, zero-car households ${fmtPct(d.noVehicleRate)}, age 65+ ${fmtPct(d.seniorRate)}. Average afternoon temperature ${fmtTemp(tract.surfaceTemp)} (${fmtOffset(tract.heatOffset)} vs city average). What are the top interventions?`;
 
     // Add user question to chat
     const userMsg = {
@@ -88,7 +96,7 @@ export default function App() {
   };
 
   const handleSelectTractById = (tractId) => {
-    const found = DALLAS_TRACTS.find(t => t.id === tractId);
+    const found = liveTracts?.find(t => t.id === tractId);
     if (found) {
       handleSelectTract(found);
       setCurrentView('dashboard');
@@ -136,17 +144,17 @@ export default function App() {
       tractId: cardOrTract.id,
       tractName: cardOrTract.name,
       category: "Resilience Hub",
-      bqmlRiskScore: cardOrTract.bqmlRiskScore || 9.0,
-      heatOffset: `+${cardOrTract.heatOffset || 8.5}°F`,
+      bqmlRiskScore: cardOrTract.bqmlRiskScore ?? 'n/a',
+      heatOffset: fmtOffset(cardOrTract.heatOffset),
       demographics: {
-        medianAge: cardOrTract.demographics?.medianAge || 38,
-        noVehicleRate: `${cardOrTract.demographics?.noVehicleRate || 35}%`,
-        povertyRate: `${cardOrTract.demographics?.povertyRate || 32}%`,
-        treeCanopy: `${cardOrTract.demographics?.treeCanopyCover || 8}%`
+        medianAge: cardOrTract.demographics?.medianAge ?? 'n/a',
+        noVehicleRate: fmtPct(cardOrTract.demographics?.noVehicleRate),
+        povertyRate: fmtPct(cardOrTract.demographics?.povertyRate),
+        treeCanopy: fmtPct(cardOrTract.demographics?.treeCanopyCover)
       },
       estimatedCost: "$650,000",
       fundingSource: "Capital Improvement Program (CIP)",
-      equityScore: 96,
+      equityScore: cardOrTract.socialVulnerability != null ? Math.min(99, Math.round(cardOrTract.socialVulnerability * 100)) : 96,
       projectedTempReduction: "-6.2°F localized relief",
       tags: ["AI Recommendation", "Resilience Hub"],
       recommendedBy: "SHADE - Copilot Recommendation"
@@ -173,6 +181,7 @@ export default function App() {
       {/* METRICS & SITUATIONAL AWARENESS RIBBON */}
       <MetricsRibbon
         currentCity={currentCity}
+        liveMetrics={liveMetrics}
         alertCount={alerts.length}
         simulatedHeatBoost={simulatedHeatBoost}
         setSimulatedHeatBoost={setSimulatedHeatBoost}
@@ -230,6 +239,8 @@ export default function App() {
               {/* Interactive Mock Map Component */}
               <HeatMap
                 currentCity={currentCity}
+                tracts={liveTracts}
+                tractSource={tractSource}
                 selectedTract={selectedTract}
                 onSelectTract={handleSelectTract}
                 showCoolingCenters={showCoolingCenters}

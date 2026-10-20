@@ -10,15 +10,23 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-export default function MetricsRibbon({ 
-  currentCity, 
-  alertCount, 
-  simulatedHeatBoost, 
+export default function MetricsRibbon({
+  currentCity,
+  liveMetrics = {},
+  alertCount,
+  simulatedHeatBoost,
   setSimulatedHeatBoost,
   onOpenAlerts
 }) {
-  const effectiveTemp = currentCity.ambientTemp + simulatedHeatBoost;
-  const effectiveIndex = currentCity.heatIndex + simulatedHeatBoost;
+  // Live values (lib/liveMetrics) where the data has them; the city presets otherwise.
+  const hasLiveHeat = liveMetrics.temp != null;
+  const hasLivePop = liveMetrics.populationAtRisk != null;
+  const effectiveTemp = Math.round((hasLiveHeat ? liveMetrics.temp : currentCity.ambientTemp) + simulatedHeatBoost);
+  const baseIndex = liveMetrics.heatIndex ?? (hasLiveHeat ? null : currentCity.heatIndex);
+  const effectiveIndex = baseIndex == null ? 'n/a' : `${Math.round(baseIndex + simulatedHeatBoost)}°F`;
+  const advisory = hasLiveHeat ? liveMetrics.advisory : currentCity.heatAdvisoryLevel;
+  const peakTime = hasLiveHeat ? (liveMetrics.peakTime ?? 'n/a') : currentCity.peakHour;
+  const populationAtRisk = hasLivePop ? liveMetrics.populationAtRisk : currentCity.populationAtRisk;
 
   return (
     <div className="bg-slate-900/70 border-b border-slate-800/80 px-4 lg:px-6 py-2">
@@ -28,7 +36,10 @@ export default function MetricsRibbon({
         <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2">
           
           {/* Temperature & Heat Index */}
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            title={hasLiveHeat ? `Average afternoon air temperature and peak heat index across ${liveMetrics.observationCount?.toLocaleString()} Heat Watch observations (${liveMetrics.city})` : undefined}
+          >
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-400">
               <Thermometer className="w-4 h-4" />
             </div>
@@ -36,11 +47,11 @@ export default function MetricsRibbon({
               <div className="flex items-center gap-1.5 font-semibold text-slate-100">
                 <span className="text-sm font-mono text-orange-400">{effectiveTemp}°F</span>
                 <span className="text-slate-500">|</span>
-                <span className="text-slate-300">Heat Index:</span>
-                <span className="font-mono text-rose-400 font-bold">{effectiveIndex}°F</span>
+                <span className="text-slate-300">{hasLiveHeat ? 'Peak Heat Index:' : 'Heat Index:'}</span>
+                <span className="font-mono text-rose-400 font-bold">{effectiveIndex}</span>
               </div>
               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                {currentCity.heatAdvisoryLevel}
+                {advisory}
               </p>
             </div>
           </div>
@@ -51,21 +62,26 @@ export default function MetricsRibbon({
               <Clock className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-semibold text-slate-200">{currentCity.peakHour}</p>
-              <p className="text-[10px] text-slate-400">Peak Thermal Anomaly</p>
+              <p className="font-semibold text-slate-200">{peakTime}</p>
+              <p className="text-[10px] text-slate-400">{hasLiveHeat ? 'Hottest Observation' : 'Peak Thermal Anomaly'}</p>
             </div>
           </div>
 
           {/* Population at Risk */}
-          <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
+          <div
+            className="flex items-center gap-2 border-l border-slate-800 pl-4"
+            title={hasLivePop ? `Residents of the ${liveMetrics.atRiskTractCount} most socially vulnerable tracts (top 20% of ${liveMetrics.tractCount})` : undefined}
+          >
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-rose-500/15 text-rose-400">
               <Users className="w-4 h-4" />
             </div>
             <div>
               <p className="font-semibold text-slate-100 font-mono">
-                {currentCity.populationAtRisk.toLocaleString()}
+                {populationAtRisk.toLocaleString()}
               </p>
-              <p className="text-[10px] text-slate-400">High-Vulnerability Pop</p>
+              <p className="text-[10px] text-slate-400">
+                {hasLivePop ? `High-Vulnerability Pop · ${liveMetrics.atRiskTractCount} tracts` : 'High-Vulnerability Pop'}
+              </p>
             </div>
           </div>
 

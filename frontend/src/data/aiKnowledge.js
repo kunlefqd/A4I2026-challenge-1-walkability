@@ -1,4 +1,6 @@
 // AI Planning responses, structured card templates, and intelligent query parser
+import { fmtOffset, fmtPct, fmtTemp } from '../lib/tractAdapter';
+
 export const INITIAL_CHAT_MESSAGES = [
   {
     id: "msg-1",
@@ -235,23 +237,18 @@ Recommendation: Approved in Bond Proposition D. Contractor procurement scheduled
     };
   }
 
-  // 5. Node click inspection response
+  // 5. Node click inspection response (live tract_heat_risk tract; see lib/tractAdapter)
   if (contextTract) {
+    const d = contextTract.demographics;
     return {
-      content: `### 📍 Spatial Node Telemetry: ${contextTract.name} (${contextTract.tractNumber})
+      content: `### 📍 Spatial Node Telemetry: ${contextTract.name} (GEOID ${contextTract.tractNumber})
 
-- **BQML Heat Offset:** **+${contextTract.heatOffset}°F** above Dallas regional baseline.
-- **Current Surface Temperature:** **${contextTract.surfaceTemp}°F**
-- **Heat Vulnerability Score:** **${contextTract.bqmlRiskScore} / 10**
-- **Demographics:** Zero-Vehicle: **${contextTract.demographics.noVehicleRate}%** | Senior Pop (>65): **${contextTract.demographics.seniorRate}%** | Tree Canopy: **${contextTract.demographics.treeCanopyCover}%**
-- **Nearest Cooling Facility:** ${contextTract.nearestCenterDist} (${contextTract.coolingCenterNearby ? "Nearby" : "Deficit Zone"})
-- **Historical Hotspot:** ${contextTract.isHistoricalHotspot ? `YES (${contextTract.historicalCalls2025} EMS calls in 2025)` : "No active flag"}
+- **Location:** ${contextTract.area} · ${d.population.toLocaleString()} residents
+- **Social Vulnerability Score:** **${contextTract.socialVulnerability.toFixed(2)}** (risk ${contextTract.bqmlRiskScore} / 10)
+- **Average Afternoon Temperature:** **${fmtTemp(contextTract.surfaceTemp)}** (${fmtOffset(contextTract.heatOffset)} vs city average${contextTract.observationCount ? `, ${contextTract.observationCount.toLocaleString()} observations` : ''})
+- **Demographics:** Zero-Vehicle: **${fmtPct(d.noVehicleRate)}** | Senior Pop (>65): **${fmtPct(d.seniorRate)}** | Poverty: **${fmtPct(d.povertyRate)}**${d.medianAge != null ? ` | Median Age: **${d.medianAge}**` : ''}
 
-**Strategic Intelligence:**
-${contextTract.notes}
-
-**Recommended Action:**
-${contextTract.recommendedAction}`,
+Ask me to compare this tract with its neighbours, or push it to the Kanban board as a candidate site.`,
       structuredType: "tract_card",
       tract: contextTract
     };

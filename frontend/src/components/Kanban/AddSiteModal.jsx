@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Sparkles, Plus, Building, TreePine, ShieldCheck } from 'lucide-react';
-import { DALLAS_TRACTS } from '../../data/cityData';
+import { useTractData } from '../../lib/useTractData';
+import { fmtOffset, fmtPct } from '../../lib/tractAdapter';
 
 export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
-  const [selectedTractId, setSelectedTractId] = useState(DALLAS_TRACTS[0].id);
+  const { tracts } = useTractData();
+  // Most vulnerable first, so the likeliest candidates are at the top of a long list.
+  const sortedTracts = useMemo(
+    () => (tracts ? [...tracts].sort((a, b) => b.socialVulnerability - a.socialVulnerability) : []),
+    [tracts]
+  );
+  const [selectedTractId, setSelectedTractId] = useState(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Resilience Hub');
   const [cost, setCost] = useState('$500,000');
@@ -12,11 +19,11 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
 
   if (!isOpen) return null;
 
-  const currentTract = DALLAS_TRACTS.find(t => t.id === selectedTractId) || DALLAS_TRACTS[0];
+  const currentTract = sortedTracts.find(t => t.id === selectedTractId) || sortedTracts[0];
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !currentTract) return;
 
     const newCard = {
       id: `kb-custom-${Date.now()}`,
@@ -26,12 +33,12 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
       tractName: currentTract.name,
       category,
       bqmlRiskScore: currentTract.bqmlRiskScore,
-      heatOffset: `+${currentTract.heatOffset}°F`,
+      heatOffset: fmtOffset(currentTract.heatOffset),
       demographics: {
-        medianAge: currentTract.demographics.medianAge,
-        noVehicleRate: `${currentTract.demographics.noVehicleRate}%`,
-        povertyRate: `${currentTract.demographics.povertyRate}%`,
-        treeCanopy: `${currentTract.demographics.treeCanopyCover}%`
+        medianAge: currentTract.demographics.medianAge ?? 'n/a',
+        noVehicleRate: fmtPct(currentTract.demographics.noVehicleRate),
+        povertyRate: fmtPct(currentTract.demographics.povertyRate),
+        treeCanopy: fmtPct(currentTract.demographics.treeCanopyCover)
       },
       estimatedCost: cost,
       fundingSource: funding,
@@ -77,25 +84,29 @@ export default function AddSiteModal({ isOpen, onClose, onAddCard }) {
               TARGET CENSUS TRACT (AUTOMATIC BQML TELEMETRY)
             </label>
             <select
-              value={selectedTractId}
+              value={currentTract?.id ?? ''}
               onChange={(e) => setSelectedTractId(e.target.value)}
+              disabled={!currentTract}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
             >
-              {DALLAS_TRACTS.map((t) => (
+              {!currentTract && <option value="">Loading tracts…</option>}
+              {sortedTracts.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name} (+{t.heatOffset}°F / Risk: {t.bqmlRiskScore})
+                  {t.name}, {t.area} (SVI {t.socialVulnerability.toFixed(2)} / Risk: {t.bqmlRiskScore})
                 </option>
               ))}
             </select>
           </div>
 
           {/* Auto Demographics Banner */}
-          <div className="grid grid-cols-4 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[10px] font-mono">
-            <div>Offset: <b className="text-orange-400">+{currentTract.heatOffset}°F</b></div>
-            <div>Zero-Car: <b className="text-purple-300">{currentTract.demographics.noVehicleRate}%</b></div>
-            <div>Age &gt;65: <b className="text-amber-300">{currentTract.demographics.seniorRate}%</b></div>
-            <div>Canopy: <b className="text-emerald-300">{currentTract.demographics.treeCanopyCover}%</b></div>
-          </div>
+          {currentTract && (
+            <div className="grid grid-cols-4 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[10px] font-mono">
+              <div>vs City: <b className="text-orange-400">{fmtOffset(currentTract.heatOffset)}</b></div>
+              <div>Zero-Car: <b className="text-purple-300">{fmtPct(currentTract.demographics.noVehicleRate)}</b></div>
+              <div>Age &gt;65: <b className="text-amber-300">{fmtPct(currentTract.demographics.seniorRate)}</b></div>
+              <div>Poverty: <b className="text-slate-200">{fmtPct(currentTract.demographics.povertyRate)}</b></div>
+            </div>
+          )}
 
           {/* Intervention Title */}
           <div>
