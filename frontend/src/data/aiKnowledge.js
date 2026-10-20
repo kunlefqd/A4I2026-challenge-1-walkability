@@ -6,14 +6,13 @@ export const INITIAL_CHAT_MESSAGES = [
     id: "msg-1",
     sender: "agent",
     timestamp: "11:00 AM",
-    content: `**SHADE** operational in **Dallas - Summer Campaign** mode. 
+    content: `**SHADE** is ready, powered by **Gemini 2.5 Flash**.
 
-BigQuery ML thermal offset predictions calibrated using Landsat 9 surface thermography, DART transit trip frequency, and 2024 American Community Survey (ACS) 5-year demographic tracts.
+I work from census-tract social vulnerability scores and NOAA/CAPA Heat Watch afternoon temperature observations stored in BigQuery.
 
-**Current Situation:**
-- Baseline ambient: **104°F** | Regional Heat Index: **113°F**
-- **4 Critical Tracts** exceeding **+8.5°F** urban heat island offset.
-- Estimated **148,500 residents** in high-vulnerability heat zones today.
+**To get started:**
+- Click any tract on the map to see its vulnerability, temperature, and demographics.
+- Open **Active Alerts** for the most socially vulnerable areas.
 
 How can I assist your operational deployment or capital budget planning today?`,
     structuredData: null

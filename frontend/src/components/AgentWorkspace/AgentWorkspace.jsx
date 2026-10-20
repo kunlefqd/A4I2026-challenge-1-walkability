@@ -25,7 +25,7 @@ export default function AgentWorkspace({
   onAddToKanban
 }) {
   return (
-    <div className="flex flex-col h-[580px] lg:h-[640px] bg-[#0b0f19] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="flex flex-col h-[580px] lg:h-auto lg:absolute lg:inset-0 bg-[#0b0f19] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
       
       {/* Workspace Header with Tabs */}
       <div className="flex items-center justify-between px-3 py-2 bg-slate-950/80 border-b border-slate-800">
@@ -67,7 +67,7 @@ export default function AgentWorkspace({
         {/* Right Status Pill */}
         <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Gemini 3.8 Spatial</span>
+          <span>Gemini 2.5 Flash</span>
         </div>
 
       </div>

@@ -174,7 +174,7 @@ export default function ChatTab({
               {/* Header meta */}
               <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] text-slate-400 font-mono">
                 <span className={msg.sender === 'user' ? 'text-orange-200 font-bold' : 'text-orange-400 font-bold'}>
-                  {msg.sender === 'user' ? 'City Operations Director' : 'SHADE (Gemini 3.8)'}
+                  {msg.sender === 'user' ? 'City Operations Director' : 'SHADE (Gemini 2.5 Flash)'}
                 </span>
                 <span>{msg.timestamp}</span>
               </div>
@@ -339,7 +339,7 @@ export default function ChatTab({
               <Sparkles className="w-4 h-4 animate-spin" />
             </div>
             <div className="glass-panel rounded-2xl rounded-tl-none p-3 border border-slate-800 flex items-center gap-1.5 text-xs text-orange-300">
-              <span className="font-mono text-[11px]">BigQuery ML evaluating spatial telemetry</span>
+              <span className="font-mono text-[11px]">Gemini 2.5 Flash is thinking</span>
               <span className="inline-flex gap-1 ml-1">
                 <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce"></span>
                 <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>

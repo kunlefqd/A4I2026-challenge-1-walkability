@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from './components/Navbar';
 import MetricsRibbon from './components/MetricsRibbon';
 import HeatMap from './components/Map/HeatMap';
@@ -11,7 +11,8 @@ import { CITIES } from './data/cityData';
 import { useHeatSummary, useTractData } from './lib/useTractData';
 import { computeLiveMetrics } from './lib/liveMetrics';
 import { fmtOffset, fmtPct, fmtTemp } from './lib/tractAdapter';
-import { INITIAL_ALERTS, INITIAL_AUDIT_LOG } from './data/initialAlerts';
+import { buildVulnerabilityAlerts } from './lib/vulnerabilityAlerts';
+import { INITIAL_AUDIT_LOG } from './data/initialAlerts';
 import { INITIAL_KANBAN_CARDS } from './data/initialKanban';
 import { INITIAL_CHAT_MESSAGES, getAgentResponse } from './data/aiKnowledge';
 import { CheckCircle2, Bell, Sparkles } from 'lucide-react';
@@ -41,8 +42,16 @@ export default function App() {
   // Agent Workspace & Alerts States
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('chat'); // 'chat' | 'alerts'
   const [chatMessages, setChatMessages] = useState(INITIAL_CHAT_MESSAGES);
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+  const [alerts, setAlerts] = useState([]);
   const [auditLog, setAuditLog] = useState(INITIAL_AUDIT_LOG);
+
+  // Alerts are the most vulnerable live tracts. Seed them once, so dismissed alerts stay dismissed.
+  const alertsSeeded = useRef(false);
+  useEffect(() => {
+    if (alertsSeeded.current || !liveTracts?.length) return;
+    alertsSeeded.current = true;
+    setAlerts(buildVulnerabilityAlerts(liveTracts));
+  }, [liveTracts]);
 
   // Kanban Board States
   const [kanbanCards, setKanbanCards] = useState(INITIAL_KANBAN_CARDS);
@@ -204,8 +213,8 @@ export default function App() {
           </span>
         </div>
         <div className="hidden lg:flex items-center gap-3">
-          <span>BigQuery ML Model: <b>UHI_Landsat_ACS_v4</b></span>
-          <span className="text-emerald-400">Confidence: 96.8%</span>
+          <span>AI Model: <b>Gemini 2.5 Flash</b></span>
+          <span>Data: <b>BigQuery</b></span>
         </div>
       </div>
 
@@ -257,8 +266,10 @@ export default function App() {
 
             </div>
 
-            {/* RIGHT COLUMN: Agent Workspace (40% width = 5/12 cols on desktop) */}
-            <div className="lg:col-span-5 flex flex-col">
+            {/* RIGHT COLUMN: Agent Workspace (40% width = 5/12 cols on desktop).
+                On desktop it stretches to the map column's height; the workspace is absolutely
+                positioned inside so a long chat scrolls instead of making the row taller. */}
+            <div className="lg:col-span-5 flex flex-col lg:self-stretch lg:relative lg:min-h-[640px]">
               <AgentWorkspace
                 activeTab={activeWorkspaceTab}
                 setActiveTab={setActiveWorkspaceTab}
@@ -312,9 +323,9 @@ export default function App() {
           <span>City of Dallas Office of Resilience & Emergency Operations</span>
         </div>
         <div className="flex items-center gap-4 font-mono text-[11px]">
-          <span>BigQuery ML Spatial API</span>
-          <span>Landsat-9 Surface Temp</span>
-          <span>Justice40 Audited</span>
+          <span>Gemini 2.5 Flash</span>
+          <span>BigQuery</span>
+          <span>NOAA/CAPA Heat Watch</span>
         </div>
       </footer>
 
