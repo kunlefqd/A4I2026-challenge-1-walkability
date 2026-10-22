@@ -6,10 +6,6 @@
 
 - Frontend: https://shade-frontend-965843808689.us-central1.run.app
 - API: https://shade-api-hgwszp7mja-uc.a.run.app
-You'll need this key locally:
-# Google Maps JavaScript API key (enable "Maps JavaScript API" in your GCP project).
-VITE_GOOGLE_MAPS_API_KEY=AIzaSyBytayiX8FH_yzuF32I-JhAzPICx6CbaD0
-
 
 ---
 
